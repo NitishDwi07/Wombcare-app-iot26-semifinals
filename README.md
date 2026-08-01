@@ -1,100 +1,143 @@
 # WombCare — Android App
 
-Companion app for the WombCare fetal-wellness wearable (Silicon Labs EFR32MG26).
-Team SilicoVegas · Silicon Labs × FPT IoT Challenge 2026.
+Companion app for the **WombCare** fetal-wellness wearable (Silicon Labs EFR32MG26).
+Team **SilicoVegas** · Silicon Labs × FPT IoT Challenge 2026.
 
 > **WombCare is a home wellness-awareness / early-warning aid, not a diagnostic device.**
 > It flags patterns associated with reduced fetal wellbeing so a mother seeks care sooner.
-> No screen, report, or string in this app may claim a diagnosis.
+> No screen, report, or string in this app claims a diagnosis.
 
 Two apps in one binary, chosen by role at signup:
-- **Patient** (the mother) — connects to the device over BLE, sees live fetal heart rate,
-  kick count and wellness status, keeps history, and shares a unique code with her doctor.
-- **Doctor** — pastes that code, and after the mother approves, sees her readings live plus
+
+- **Patient** (the mother) — connects to the wearable over Bluetooth, sees live fetal heart
+  rate, kick count and a wellness status (Normal / Suspect / Pathologic), keeps history, and
+  shares a unique code with her doctor.
+- **Doctor** — pastes that code and, once the mother approves, sees her readings live plus
   session history and alerts.
+
+## 📲 Try it now (free)
+
+**Download & install on any Android phone (8.0+):** **https://wombcare-icc26.web.app**
+
+No wearable needed — **Demo mode is on by default**, so tapping *Start monitoring* plays a
+full simulated session (live charts, a real alert) end to end. To see the doctor link:
+install on a second phone, sign up as a doctor, and paste the mother's share code.
+
+Screenshots of every screen: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+
+## Status — feature-complete
+
+Both apps, authentication, live monitoring, doctor sharing, and alerts are built, tested,
+and deployed. Clean builds, **0 warnings**, **41 unit tests + 23 security-rules tests green**.
+
+| Area | State |
+|---|---|
+| Onboarding · consent gate · auth (email/password) · role routing | ✅ |
+| Patient dashboard — live status, 6 tiles, FHR/NSP/kick charts, session summary | ✅ |
+| BLE device layer + demo simulator (behind one interface) | ✅ (simulator verified; real BLE awaits firmware) |
+| Firebase Realtime Database backend — rules, App Check | ✅ deployed |
+| Doctor app — patient list, add-by-code, live view, alerts feed | ✅ |
+| Share code · approve / revoke · alerts · delete-my-data | ✅ |
+| BLE pairing security (bonding + encryption + passkey) | ✅ app-side; firmware change written, awaits flash |
+
+## Tech stack
+
+Kotlin · Jetpack Compose (Material 3) · Hilt · Coroutines/Flow · DataStore ·
+**Firebase** (Auth · Realtime Database · App Check) · `minSdk 26`, `targetSdk 35`, JDK 17.
+
+> **Why Realtime Database, not Firestore:** Firestore now requires a billing account even to
+> create the database; RTDB runs on the free Spark plan and fits this workload (one 8-byte
+> reading per minute, seen live on another phone). Every feature and every security rule
+> carries over unchanged.
+
+## Architecture (short)
+
+```
+[sensors] → MG26 wearable (on-device DSP + TinyML) → BLE 8 bytes/min
+                                                        │
+                                       ┌────────────────┴───────────────┐
+                                       ▼ real                            ▼ demo
+                              BleDeviceSource                   SimulatedDeviceSource
+                                       └──────── same parser ───────────┘
+                                                        │  ClinicalReading
+                                          SessionEngine + AlertEvaluator
+                                                        │
+                                          Compose UI (reactive) ──► Room-free offline via
+                                                        │            Firebase persistence
+                                    (only if Sharing ON) ▼
+                                       Firebase RTDB ── rules + App Check ──► Doctor's phone
+```
+
+- **One device interface, two implementations.** Real BLE and the demo simulator both emit
+  readings through the *same* production parser, so demo mode exercises real code — and the
+  app can't tell which source it's using.
+- **Reactive top-level routing.** `SessionViewModel` watches Firebase auth state; the nav
+  host swaps the whole signed-out/signed-in subtree when it changes (and picks the rose or
+  sky theme by role). Sign-out from anywhere, or a token expiring, just works.
+- **Honest data by construction.** `fhr == 0` (no lock) becomes `null` and renders `--`, never
+  `0`; the FHR line breaks across gaps instead of interpolating; clinical status is always
+  colour **+ icon + word**, never colour alone.
+
+## Security
+
+Two boundaries, both closed:
+
+- **Cloud (phone ↔ Firebase ↔ doctor):** security rules enforce "a doctor reads a patient's
+  data only after an active, approved link"; share codes can be *resolved* but never
+  *enumerated*; doctors can't write clinical data; revoke cuts access instantly; consents are
+  write-once. App Check blocks non-app clients. Proven by 23 emulator rules tests.
+- **Device ↔ phone (BLE):** the Clinical Update characteristic requires a **bonded,
+  encrypted, passkey-authenticated** link, so a nearby scanner can't read fetal data. See
+  [docs/BLE_CONTRACT.md §7](docs/BLE_CONTRACT.md). (App side implemented; the firmware change
+  is written and awaits the firmware team's flash.)
+
+## Build & run
+
+```bash
+./gradlew testDebugUnitTest assembleDebug     # unit tests + debug APK
+./gradlew installDebug                        # install on a connected device/emulator
+```
+
+**Two machine-local files are required and are NOT in the repo** (gitignored — one is a
+secret, one is per-machine):
+
+1. **`app/google-services.json`** — download from the [Firebase console](https://console.firebase.google.com)
+   for project `wombcare-icc26` (Project settings → Your apps → `com.silicovegas.wombcare`).
+   Required for the app to reach the backend.
+2. **`local.properties`** — your Android SDK path. Android Studio creates it automatically on
+   first open; or write `sdk.dir=/path/to/Android/Sdk`.
+
+For a **signed release build**, also copy `keystore.properties.template` → `keystore.properties`
+and point it at a release keystore. The team's release keystore is **not** in the repo and
+must be kept safe — every future update must be signed with the same key.
+
+## Testing
+
+```bash
+./gradlew testDebugUnitTest                                   # 41 JVM unit tests
+firebase emulators:exec --only auth,database \
+    "npm test --prefix firebase"                              # 23 RTDB security-rules tests
+```
+
+The unit tests cover the BLE parser (incl. the all-zero subscribe frame, unsigned bytes,
+v1/v2), the session engine (reboot split, invalid-FHR handling, the demo alert timing), the
+alert evaluator (confirm-and-persist, signal gating), the share-code generator, and form
+validation. The rules tests prove the access model above.
 
 ## Documentation
 
 | Doc | What's in it |
 |---|---|
-| [docs/PLAN.md](docs/PLAN.md) | Phase-wise build plan, Firestore model + security rules, design system, why a DB is needed |
-| [docs/FEATURES.md](docs/FEATURES.md) | Every feature, tiered `T1`/`T2`/`T3`, traced to the data that feeds it, plus what's deliberately out of scope |
-| [docs/BLE_CONTRACT.md](docs/BLE_CONTRACT.md) | The device↔app protocol. **Change this before changing any BLE code.** |
+| [docs/PLAN.md](docs/PLAN.md) | Phase-wise plan, Firestore/RTDB model + rules, design system |
+| [docs/FEATURES.md](docs/FEATURES.md) | Every feature, tiered, traced to the data that feeds it |
+| [docs/BLE_CONTRACT.md](docs/BLE_CONTRACT.md) | Device↔app protocol + BLE security. **Change this before any BLE code.** |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 4-minute two-phone demo runsheet for judges |
+| [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md) | Firebase project setup steps |
+| [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) | Every screen, captured |
 
-## Stack
+## Dependencies on the firmware team (parallel track)
 
-Kotlin · Jetpack Compose (Material 3) · Hilt · Room · DataStore · Firebase (Auth,
-**Realtime Database**, FCM, App Check) · `minSdk 26`, `targetSdk 35`, JDK 17.
-
-> **Why Realtime Database, not Firestore:** Firestore now requires a billing account even
-> to create the database. RTDB runs on the free Spark plan, and for this workload (one
-> 8-byte reading per minute, seen live on another phone) it's the better fit anyway — see
-> [docs/PLAN.md §2](docs/PLAN.md). Every feature and every security rule from the original
-> design carries over unchanged.
-
-## Build
-
-```bash
-./gradlew testDebugUnitTest assembleDebug     # unit tests + debug APK
-./gradlew installDebug                        # to a connected device
-```
-
-`local.properties` (Android SDK path) is machine-local and not committed. Firebase's
-`google-services.json` is likewise not committed — see Phase 2 in the plan.
-
-## Status — Phases 0 and 1 complete
-
-Clean build, no warnings, **14 parser unit tests green**, debug APK produced.
-`MainActivity` currently launches the **component gallery** — every component in every
-state, with live Patient/Doctor and light/dark toggles. Phase 3 replaces it with the
-navigation graph and moves the gallery behind a debug-only entry point.
-
-**Phase 0 — the BLE contract, frozen in code**
-- `core/ble/WombCareGatt.kt` — contract constants, accepting both disputed UUID pairs.
-- `core/ble/ClinicalUpdateParser.kt` — decodes payload v1 (8 B), forward-supports v2 (10 B),
-  and encodes the firmware's two traps in the type system: `fhr == 0` becomes `null`
-  (no lock, *not* zero bpm), and the all-zero frame the firmware pushes on subscribe is
-  flagged `isPlaceholder` so it can never render as "FHR 0, Normal".
-- `core/ble/ConnectionState.kt` — distinguishes `Connected` (link up, device still asleep
-  awaiting BTN0) from `Monitoring` (windows arriving) from `SignalLost` (quiet past 150 s).
-
-**Phase 1 — the design system**
-- `core/ui/theme/` — tokens, rose (patient) + sky (doctor) palettes, light and dark,
-  tabular figures so live numbers don't jitter, and no dynamic colour so "what colour is
-  Suspect" is constant across every device.
-- `core/ui/format/StatusVisuals.kt` — accent, container, icon and word travel together in
-  one `StatusVisual`, so no call site can render clinical status as colour alone.
-- `core/ui/components/` — `StatusHeroCard`, `StatusPill`, `StatTile`, `BigNumber`,
-  `SectionCard`, `ConnectionChip`, `PrimaryButton`/`SecondaryButton`/`DangerButton`,
-  `ConsentCheckbox`, `EmptyState`, `ShimmerBox`, `DisclaimerFootnote`/`DisclaimerCard`.
-- `core/ui/gallery/ComponentGallery.kt` — the review surface.
-
-Behaviours baked into components rather than left to screens: a null measurement renders
-`--`; a low-confidence reading is dimmed but never hidden; TalkBack reads a tile as one
-phrase ("Fetal heart rate, 142 BPM") and a missing value as "no reading"; the disclaimer is
-a component, not a sentence each screen must remember.
-
-**Phase 2 — the backend (in progress)**
-- `database.rules.json` — the full security model. **23 rules unit tests green** against
-  the Firebase emulator (`firebase/test/rules.test.js`), proving the app's core promise:
-  a doctor reads a patient's data only after approval, share codes resolve but can't be
-  enumerated, doctors can't write clinical data, revoke cuts access instantly, consents are
-  write-once. Run: `firebase emulators:exec --only auth,database "npm test --prefix firebase"`.
-- `core/util/ShareCode.kt` — Crockford-base32 code generator + input normaliser (folds
-  I/L/O/U look-alikes), 7 unit tests.
-- `core/data/` — Hilt Firebase module, `AuthRepository` (signup writes profile + consents
-  atomically, rolls back the Auth user if the profile write is rejected), and
-  `CareLinkRepository` (share-code claim transaction, and approve/revoke as single atomic
-  multi-path writes so a doctor can never be "active" without read access or vice-versa).
-
-**Still needs you:** `firebase login` in a terminal, then I deploy the rules and seed data.
-Everything above was built and tested with **no login** — the emulator runs offline.
-
-## Open dependencies on the firmware team
-
-See [docs/PLAN.md §6](docs/PLAN.md). The two that block real-hardware testing:
-1. **UUIDs disagree** across `uuid.txt`, the flashed `btconf`, and git `main`.
-2. **Motion state and battery are not transmitted** — payload v2 requested.
-
-Neither blocks app development: the Phase 4 simulator feeds synthetic frames through the
-same parser as real BLE.
+The app runs today on the simulator. Real-hardware readings need the firmware team to:
+confirm the final BLE UUIDs, ship **payload v2** (adds motion + battery), get the BLE stack
+compiling with the **Security Manager** component, and enable the bonding/passkey change
+already written in `wombcare_ble.c`. Detail in [docs/BLE_CONTRACT.md](docs/BLE_CONTRACT.md).
