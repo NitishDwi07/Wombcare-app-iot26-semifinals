@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Heart -->
+    <path
+        android:fillColor="#D96A85"
+        android:pathData="M54,76 C54,76 32,62 32,48 C32,40 38,35 45,35 C49,35 52,37 54,40 C56,37 59,35 63,35 C70,35 76,40 76,48 C76,62 54,76 54,76 Z" />
+    <!-- Pulse line -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M38,52 L46,52 L50,44 L56,60 L60,52 L70,52" />
+</vector>

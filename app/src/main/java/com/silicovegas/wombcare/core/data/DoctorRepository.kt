@@ -1,0 +1,132 @@
+package com.silicovegas.wombcare.core.data
+
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.FirebaseDatabase
+import com.silicovegas.wombcare.core.ble.ClinicalReading
+import com.silicovegas.wombcare.core.data.model.AlertRecord
+import com.silicovegas.wombcare.core.data.model.CareLinkStatus
+import com.silicovegas.wombcare.core.data.model.LiveStatus
+import com.silicovegas.wombcare.core.data.model.PatientListEntry
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * The doctor's read side. Everything here is a live [Flow] backed by RTDB listeners, and
+ * every path it touches is one the security rules only open to a doctor with an ACTIVE
+ * link — so if a mother revokes access mid-view, the listener is cancelled by the rules and
+ * the stream simply ends (see [valueFlow]).
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+@Singleton
+class DoctorRepository @Inject constructor(
+    private val db: FirebaseDatabase,
+) {
+    /**
+     * The doctor's patient list: their active links, joined to each patient's live node.
+     * Emits a fresh list whenever any linked patient's `liveStatus` changes, so the live
+     * dots update in place.
+     */
+    fun linkedPatients(doctorUid: String): Flow<List<PatientListEntry>> =
+        activePatientUids(doctorUid).flatMapLatest { uids ->
+            if (uids.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(uids.map { patientEntry(it) }) { it.filterNotNull().toList() }
+            }
+        }
+
+    private fun activePatientUids(doctorUid: String): Flow<List<String>> =
+        db.getReference(DbPaths.careLinksForDoctor(doctorUid)).valueFlow().map { snap ->
+            snap.children.mapNotNull { child ->
+                val status = CareLinkStatus.from(child.child("status").getValue(String::class.java))
+                child.key.takeIf { status == CareLinkStatus.ACTIVE }
+            }
+        }
+
+    private fun patientEntry(patientUid: String): Flow<PatientListEntry?> =
+        db.getReference(DbPaths.patient(patientUid)).valueFlow().map { snap ->
+            if (!snap.exists()) return@map null
+            PatientListEntry(
+                patientUid = patientUid,
+                fullName = snap.child("fullName").getValue(String::class.java) ?: "Patient",
+                pregnancyWeeks = snap.child("pregnancyWeeks").getValue(Long::class.java)?.toInt(),
+                live = snap.child("liveStatus").toLiveStatus(),
+            )
+        }
+
+    /** The live summary map, for the detail header's "LIVE / last seen" state. */
+    fun patientLive(patientUid: String): Flow<LiveStatus?> =
+        db.getReference(DbPaths.liveStatus(patientUid)).valueFlow().map { it.toLiveStatus() }
+
+    /**
+     * All alerts across the doctor's linked patients, newest first — the doctor's inbox.
+     * Recombines whenever any patient's alert set or name changes.
+     */
+    fun alertsFeed(doctorUid: String): Flow<List<AlertRecord>> =
+        activePatientUids(doctorUid).flatMapLatest { uids ->
+            if (uids.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(uids.map { alertsForPatient(it) }) { arrays ->
+                    arrays.toList().flatten().sortedByDescending { it.createdAt }
+                }
+            }
+        }
+
+    private fun alertsForPatient(patientUid: String): Flow<List<AlertRecord>> =
+        combine(
+            db.getReference(DbPaths.patient(patientUid)).child("fullName").valueFlow(),
+            db.getReference(DbPaths.alerts(patientUid)).valueFlow(),
+        ) { nameSnap, alertsSnap ->
+            val name = nameSnap.getValue(String::class.java) ?: "Patient"
+            alertsSnap.children.mapNotNull { a ->
+                val createdAt = a.child("createdAt").getValue(Long::class.java) ?: return@mapNotNull null
+                AlertRecord(
+                    id = a.key ?: return@mapNotNull null,
+                    patientUid = patientUid,
+                    patientName = name,
+                    sessionId = a.child("sessionId").getValue(String::class.java).orEmpty(),
+                    nsp = a.child("nsp").getValue(Long::class.java)?.toInt() ?: 2,
+                    createdAt = createdAt,
+                    acknowledgedBy = a.child("acknowledgedBy").getValue(String::class.java),
+                    acknowledgedAt = a.child("acknowledgedAt").getValue(Long::class.java),
+                )
+            }
+        }
+
+    /** Doctor acknowledges an alert — the only clinical write a doctor is allowed. */
+    suspend fun acknowledgeAlert(patientUid: String, alertId: String, doctorUid: String, nowMillis: Long) {
+        db.reference.updateChildren(
+            mapOf(
+                "${DbPaths.alert(patientUid, alertId)}/acknowledgedBy" to doctorUid,
+                "${DbPaths.alert(patientUid, alertId)}/acknowledgedAt" to nowMillis,
+            ),
+        ).await()
+    }
+
+    /** Readings for one session, ordered by device minute — feeds the same charts as P3. */
+    fun sessionReadings(patientUid: String, sessionId: String): Flow<List<ClinicalReading>> =
+        db.getReference(DbPaths.readings(patientUid, sessionId)).valueFlow().map { snap ->
+            snap.children.mapNotNull { ReadingWire.fromSnapshot(it) }
+                .sortedBy { it.deviceMinute }
+        }
+
+    private fun DataSnapshot.toLiveStatus(): LiveStatus? {
+        if (!exists()) return null
+        return LiveStatus(
+            sessionId = child("sessionId").getValue(String::class.java),
+            nsp = child("nsp").getValue(Long::class.java)?.toInt() ?: 0,
+            fhrBpm = child("fhrBpm").getValue(Long::class.java)?.toInt(),
+            kickTotal = child("kickTotal").getValue(Long::class.java)?.toInt() ?: 0,
+            confidence = child("confidence").getValue(Long::class.java)?.toInt() ?: 0,
+            lastReadingAt = child("lastReadingAt").getValue(Long::class.java) ?: 0L,
+        )
+    }
+}

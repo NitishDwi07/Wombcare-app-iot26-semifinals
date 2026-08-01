@@ -1,0 +1,31 @@
+# Android / Gradle
+*.iml
+.gradle/
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Machine-local
+/local.properties
+/.idea/
+.DS_Store
+
+# --- SECRETS: never commit ---
+# Release signing key + passwords
+*.jks
+*.keystore
+keystore.properties
+# Firebase app config (per-developer; contains API identifiers)
+google-services.json
+
+# Firebase tooling
+/firebase/node_modules/
+/.firebase/
+firebase-debug.log
+database-debug.log
+
+# Built APK served for download (large binary; rebuild instead of committing)
+/public/wombcare-download
+*.apk

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WombCare</string>
+
+    <!-- The framing rule from WOMBCARE_HANDOFF.md. Shown on every clinical surface. -->
+    <string name="disclaimer_short">Wellness awareness, not a diagnosis.</string>
+    <string name="disclaimer_long">WombCare helps you notice patterns associated with
+        reduced fetal wellbeing so you can seek care sooner. It is not a medical device,
+        does not diagnose any condition, and does not replace clinical care.</string>
+
+    <!-- Clinical status. Always rendered with colour AND icon AND this word. -->
+    <string name="status_normal">Normal</string>
+    <string name="status_suspect">Suspect</string>
+    <string name="status_pathologic">Pathologic</string>
+    <string name="status_unknown">Unknown</string>
+
+    <!-- Motion. v1 firmware can only distinguish resting from active. -->
+    <string name="motion_resting">Resting</string>
+    <string name="motion_sitting">Sitting</string>
+    <string name="motion_walking">Walking</string>
+    <string name="motion_active">Active</string>
+    <string name="motion_unknown">Unknown</string>
+
+    <!-- Connection -->
+    <string name="conn_idle">Not connected</string>
+    <string name="conn_scanning">Looking for device</string>
+    <string name="conn_connecting">Connecting</string>
+    <string name="conn_pairing">Pairing — enter device PIN</string>
+    <string name="conn_connected">Connected</string>
+    <string name="conn_monitoring">Monitoring</string>
+    <string name="conn_signal_lost">Signal lost</string>
+    <string name="conn_bluetooth_off">Bluetooth is off</string>
+    <string name="conn_permission_required">Permission needed</string>
+    <string name="conn_failed">Connection failed</string>
+
+    <!-- Measurement labels + units -->
+    <string name="label_status">Status</string>
+    <string name="label_fhr">Fetal heart rate</string>
+    <string name="label_kicks">Kicks</string>
+    <string name="label_confidence">Confidence</string>
+    <string name="label_motion">Motion</string>
+    <string name="label_battery">Battery</string>
+
+    <string name="unit_bpm">BPM</string>
+    <string name="unit_percent">%</string>
+    <string name="unit_kicks">this session</string>
+
+    <!-- A value the device could not measure. Never render 0 in its place. -->
+    <string name="value_placeholder">--</string>
+    <string name="note_signal_low">Signal quality low — please sit still</string>
+    <string name="note_waiting_first_reading">Waiting for the first reading…</string>
+    <string name="note_first_window">Your first reading arrives after one minute.</string>
+    <string name="note_not_transmitted">Not sent by this device</string>
+
+    <!-- Accessibility: "%1$s, %2$s" e.g. "Fetal heart rate, 142 BPM" -->
+    <string name="a11y_stat">%1$s, %2$s</string>
+    <string name="a11y_status">Status: %1$s</string>
+    <string name="a11y_no_value">%1$s, no reading</string>
+
+    <!-- Generic actions -->
+    <string name="action_retry">Try again</string>
+    <string name="action_continue">Continue</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose owns the real theming (core/ui/theme). This exists only so the
+         window background and splash match before the first frame. -->
+    <style name="Theme.WombCare" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FDFBFC</item>
+        <item name="android:statusBarColor">#FDFBFC</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

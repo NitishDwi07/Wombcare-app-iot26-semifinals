@@ -1,0 +1,111 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "profiles": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('patients/' + $uid + '/authorizedDoctors/' + auth.uid).val() === true)",
+        ".write": "auth != null && auth.uid === $uid",
+        "role": {
+          ".validate": "newData.isString() && (newData.val() === 'patient' || newData.val() === 'doctor')"
+        },
+        "fullName": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "phone": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "doctors": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && root.child('profiles/' + auth.uid + '/role').val() === 'doctor'"
+      }
+    },
+
+    "patients": {
+      "$patientUid": {
+        ".read": "auth != null && (auth.uid === $patientUid || root.child('patients/' + $patientUid + '/authorizedDoctors/' + auth.uid).val() === true)",
+        ".write": "auth != null && auth.uid === $patientUid",
+
+        "sessions": {
+          ".indexOn": "startedAt"
+        },
+
+        "alerts": {
+          ".indexOn": "createdAt",
+          "$alertId": {
+            "acknowledgedBy": {
+              ".write": "auth != null && root.child('patients/' + $patientUid + '/authorizedDoctors/' + auth.uid).val() === true && newData.val() === auth.uid",
+              ".validate": "newData.isString()"
+            },
+            "acknowledgedAt": {
+              ".write": "auth != null && root.child('patients/' + $patientUid + '/authorizedDoctors/' + auth.uid).val() === true",
+              ".validate": "newData.isNumber()"
+            }
+          }
+        }
+      }
+    },
+
+    "shareCodes": {
+      ".read": false,
+      ".write": false,
+      "$code": {
+        ".read": "auth != null && root.child('profiles/' + auth.uid + '/role').val() === 'doctor'",
+        ".write": "auth != null && ((!data.exists() && newData.child('patientUid').val() === auth.uid) || (data.child('patientUid').val() === auth.uid && !newData.exists()))",
+        "patientUid": { ".validate": "newData.isString()" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "careLinks": {
+      "$doctorUid": {
+        ".read": "auth != null && auth.uid === $doctorUid",
+        "$patientUid": {
+          ".read": "auth != null && (auth.uid === $doctorUid || auth.uid === $patientUid)",
+          ".write": "auth != null && ((auth.uid === $doctorUid && !data.exists() && newData.child('status').val() === 'pending' && root.child('profiles/' + auth.uid + '/role').val() === 'doctor') || auth.uid === $patientUid)",
+          "status": {
+            ".validate": "newData.val() === 'pending' || newData.val() === 'active' || newData.val() === 'revoked'"
+          },
+          "doctorName": { ".validate": "newData.isString() && newData.val().length <= 120" },
+          "clinic": { ".validate": "newData.isString() && newData.val().length <= 160" },
+          "requestedAt": { ".validate": "newData.isNumber()" },
+          "respondedAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "careLinksByPatient": {
+      "$patientUid": {
+        ".read": "auth != null && auth.uid === $patientUid",
+        ".indexOn": "status",
+        "$doctorUid": {
+          ".read": "auth != null && (auth.uid === $patientUid || auth.uid === $doctorUid)",
+          ".write": "auth != null && ((auth.uid === $doctorUid && !data.exists() && newData.child('status').val() === 'pending' && root.child('profiles/' + auth.uid + '/role').val() === 'doctor') || auth.uid === $patientUid)",
+          "status": {
+            ".validate": "newData.val() === 'pending' || newData.val() === 'active' || newData.val() === 'revoked'"
+          }
+        }
+      }
+    },
+
+    "consents": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$consentId": {
+          ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['docType', 'docVersion', 'acceptedAt'])",
+          "docType": {
+            ".validate": "newData.val() === 'terms' || newData.val() === 'privacy' || newData.val() === 'data_sharing' || newData.val() === 'not_a_medical_device'"
+          },
+          "docVersion": { ".validate": "newData.isString()" },
+          "acceptedAt": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

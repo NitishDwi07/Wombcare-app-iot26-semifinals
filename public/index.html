@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WombCare — Download</title>
+<style>
+  :root {
+    --rose: #D96A85; --rose-container: #FFE4EA; --ink: #1F2430; --muted: #6B7280;
+    --bg: #FDFBFC; --hairline: #ECEEF2; --surface: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+    display: flex; justify-content: center; padding: 24px;
+  }
+  .wrap { width: 100%; max-width: 440px; }
+  .badge {
+    width: 88px; height: 88px; border-radius: 24px; background: var(--rose-container);
+    display: flex; align-items: center; justify-content: center; margin: 24px auto 20px;
+  }
+  h1 { font-size: 28px; text-align: center; margin: 0 0 6px; }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 28px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .btn {
+    display: block; width: 100%; text-align: center; text-decoration: none;
+    background: var(--rose); color: #fff; font-weight: 600; font-size: 17px;
+    padding: 16px; border-radius: 14px; border: none;
+  }
+  ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+  ol li { margin-bottom: 8px; }
+  .meta { font-size: 13px; color: var(--muted); text-align: center; }
+  .disclaimer {
+    background: var(--rose-container); border-radius: 16px; padding: 16px;
+    font-size: 14px; color: #5C2331; margin-top: 16px;
+  }
+  code { background: var(--hairline); padding: 1px 6px; border-radius: 6px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="badge">
+      <svg width="44" height="44" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#D96A85" d="M54 76S32 62 32 48c0-8 6-13 13-13 4 0 7 2 9 5 2-3 5-5 9-5 7 0 13 5 13 13 0 14-22 28-22 28Z"/>
+        <path stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M38 52h8l4-8 6 16 4-8h10"/>
+      </svg>
+    </div>
+    <h1>WombCare</h1>
+    <p class="sub">Fetal wellness monitoring · Android app</p>
+
+    <div class="card">
+      <a class="btn" href="wombcare-download" download="wombcare.apk">Download for Android</a>
+      <p class="meta" style="margin-top:12px;">Version 0.1.0 · ~14 MB · Android 8.0+</p>
+    </div>
+
+    <div class="card">
+      <strong>How to install</strong>
+      <ol>
+        <li>Tap <b>Download for Android</b> above on your phone.</li>
+        <li>Open the downloaded <code>wombcare.apk</code> file.</li>
+        <li>If asked, allow <b>"Install from this source"</b> — this is normal for apps
+            outside the Play Store.</li>
+        <li>Tap <b>Install</b>, then <b>Open</b>.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <strong>Try it without a device</strong>
+      <ol>
+        <li>Sign up as an expectant mother.</li>
+        <li>Demo mode is on by default — tap <b>Start monitoring</b> to see a live sample
+            session with real charts and an alert.</li>
+        <li>To link a doctor: open <b>Share</b>, and on a second phone sign up as a doctor
+            and paste the code.</li>
+      </ol>
+    </div>
+
+    <div class="disclaimer">
+      WombCare is a home wellness-awareness aid — <b>not a medical device</b>. It does not
+      diagnose any condition and does not replace clinical care.
+    </div>
+    <p class="meta" style="margin-top:20px;">Team SilicoVegas · Silicon Labs × FPT IoT Challenge 2026</p>
+  </div>
+</body>
+</html>
