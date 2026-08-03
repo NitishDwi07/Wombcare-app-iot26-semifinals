@@ -66,6 +66,12 @@ class BleDeviceSource(
     private var scanning = false
     private var controlChar: BluetoothGattCharacteristic? = null
 
+    /** CCCD subscriptions still to enable (Android runs GATT ops one at a time). */
+    private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
+
+    /** Latest battery % from the standard Battery Service, merged into each reading. */
+    @Volatile private var lastBatteryPercent: Int? = null
+
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT])
     override fun connect(deviceId: String?) {
         val ad = adapter
@@ -164,31 +170,36 @@ class BleDeviceSource(
             // Remember the control characteristic (may be absent on BTN0-only firmware).
             controlChar = findControl(g)
 
-            val characteristic = findClinicalUpdate(g) ?: run {
+            val clinical = findClinicalUpdate(g) ?: run {
                 _connectionState.value = ConnectionState.Failed("clinical update characteristic not found")
                 return
             }
-            g.setCharacteristicNotification(characteristic, true)
-            characteristic.getDescriptor(CCCD_UUID)?.let { cccd ->
-                @Suppress("DEPRECATION")
-                cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                @Suppress("DEPRECATION")
-                g.writeDescriptor(cccd)
-            }
+            // Subscribe to Clinical Update AND — if the device exposes it — the standard
+            // Battery Level characteristic (0x2A19), which is how the firmware sends battery.
+            // Android allows only ONE GATT op at a time, so CCCD writes are queued and driven
+            // one-by-one from onDescriptorWrite.
+            cccdQueue.clear()
+            cccdQueue.addLast(clinical)
+            findBatteryLevel(g)?.let { cccdQueue.addLast(it) }
+            subscribeNext(g)
         }
 
         @SuppressLint("MissingPermission")
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            // CCCD write finished → notifications are on. BLE allows one op at a time, so this
-            // is the safe moment to ask the device to START monitoring (replacing BTN0). No-op
-            // if the firmware doesn't expose the control characteristic yet.
-            writeControl(g, WombCareGatt.CMD_START_MONITORING)
+            // One CCCD write finished → move to the next queued subscription. When the queue
+            // drains, notifications are all on, so this is the safe moment to ask the device
+            // to START monitoring (replacing BTN0). No-op if there's no control characteristic.
+            if (cccdQueue.isEmpty()) {
+                writeControl(g, WombCareGatt.CMD_START_MONITORING)
+            } else {
+                subscribeNext(g)
+            }
         }
 
         @Deprecated("Deprecated in API 33; kept for broad device support")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
-            publish(c.value)
+            route(c.uuid, c.value)
         }
 
         // API 33+ overload.
@@ -197,7 +208,37 @@ class BleDeviceSource(
             c: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            publish(value)
+            route(c.uuid, value)
+        }
+    }
+
+    /** Enable notifications on the next queued characteristic (one CCCD write at a time). */
+    @SuppressLint("MissingPermission")
+    private fun subscribeNext(g: BluetoothGatt) {
+        val c = cccdQueue.removeFirstOrNull() ?: return
+        g.setCharacteristicNotification(c, true)
+        val cccd = c.getDescriptor(CCCD_UUID)
+        if (cccd != null) {
+            @Suppress("DEPRECATION")
+            cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            @Suppress("DEPRECATION")
+            g.writeDescriptor(cccd)
+        } else {
+            // No CCCD on this characteristic — skip straight to the next.
+            if (cccdQueue.isEmpty()) writeControl(g, WombCareGatt.CMD_START_MONITORING)
+            else subscribeNext(g)
+        }
+    }
+
+    /** Route an incoming notification by which characteristic it came from. */
+    private fun route(uuid: UUID, bytes: ByteArray?) {
+        when {
+            uuid in WombCareGatt.ACCEPTED_CLINICAL_UPDATE -> publish(bytes)
+            uuid == WombCareGatt.BATTERY_LEVEL -> {
+                // Standard Battery Level: one byte, 0..100. Remember it and merge into the
+                // next clinical reading so the dashboard's battery tile reflects the device.
+                bytes?.firstOrNull()?.let { lastBatteryPercent = it.toInt() and 0xFF }
+            }
         }
     }
 
@@ -215,6 +256,14 @@ class BleDeviceSource(
         for (service in g.services) {
             if (service.uuid !in WombCareGatt.ACCEPTED_SERVICES) continue
             service.getCharacteristic(WombCareGatt.CONTROL)?.let { return it }
+        }
+        return null
+    }
+
+    /** Standard Battery Level characteristic (0x2A19), wherever it lives. May be absent. */
+    private fun findBatteryLevel(g: BluetoothGatt): BluetoothGattCharacteristic? {
+        for (service in g.services) {
+            service.getCharacteristic(WombCareGatt.BATTERY_LEVEL)?.let { return it }
         }
         return null
     }
@@ -247,7 +296,14 @@ class BleDeviceSource(
     private fun publish(bytes: ByteArray?) {
         when (val r = ClinicalUpdateParser.parse(bytes, System.currentTimeMillis())) {
             is ClinicalUpdateParseResult.Success -> {
-                _readings.tryEmit(r.reading)
+                // Merge in the battery from the standard Battery Service if the payload itself
+                // didn't carry one (v1) — so the dashboard shows the device's battery either way.
+                val reading = if (r.reading.batteryPercent == null && lastBatteryPercent != null) {
+                    r.reading.copy(batteryPercent = lastBatteryPercent)
+                } else {
+                    r.reading
+                }
+                _readings.tryEmit(reading)
                 _connectionState.value = ConnectionState.Monitoring
             }
             // Unsupported/malformed frames are dropped; a version bump surfaces in the parser,

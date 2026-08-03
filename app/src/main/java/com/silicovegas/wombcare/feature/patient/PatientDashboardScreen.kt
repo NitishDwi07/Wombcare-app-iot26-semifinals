@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -62,10 +63,22 @@ import com.silicovegas.wombcare.feature.patient.charts.NspTimelineStrip
 fun PatientDashboardScreen(
     onOpenSettings: () -> Unit,
     onOpenShare: () -> Unit,
+    onOpenScan: () -> Unit,
+    chosenDeviceId: String?,
+    onDeviceConsumed: () -> Unit,
     vm: MonitoringViewModel = hiltViewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // A device came back from the scan screen → connect to that specific one, then clear it
+    // so a config change doesn't re-trigger.
+    LaunchedEffect(chosenDeviceId) {
+        if (chosenDeviceId != null) {
+            vm.start(chosenDeviceId)
+            onDeviceConsumed()
+        }
+    }
 
     fun isGranted(p: String) =
         ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
@@ -89,17 +102,22 @@ fun PatientDashboardScreen(
 
     fun bleReady(): Boolean = blePermissions().all { isGranted(it) }
 
+    // Real device → open the scan/picker screen; demo → start the simulator directly.
+    fun proceedToMonitoring() {
+        if (vm.usesRealBle()) onOpenScan() else vm.start()
+    }
+
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
-        // Start only once the BLE permissions are actually granted (notifications optional).
-        // Without this guard, a real-device start would crash in startScan().
-        if (bleReady()) vm.start()
+        // Proceed only once the BLE permissions are actually granted (notifications optional).
+        // Without this guard, a real-device scan would crash needing BLUETOOTH_SCAN.
+        if (bleReady()) proceedToMonitoring()
     }
 
     fun startMonitoring() {
         val missing = requiredPermissions().filter { !isGranted(it) }
-        if (missing.isEmpty()) vm.start() else permLauncher.launch(missing.toTypedArray())
+        if (missing.isEmpty()) proceedToMonitoring() else permLauncher.launch(missing.toTypedArray())
     }
 
     Scaffold(
