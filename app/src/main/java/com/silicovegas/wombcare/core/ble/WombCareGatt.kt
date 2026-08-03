@@ -27,6 +27,20 @@ object WombCareGatt {
     val BATTERY_SERVICE: UUID = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
     val BATTERY_LEVEL: UUID = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
 
+    /**
+     * Control characteristic (Write) — lets the app start/stop monitoring in place of the
+     * physical BTN0 on the device. The app writes [CMD_START_MONITORING] on Start and
+     * [CMD_STOP_MONITORING] on Stop; the firmware wakes/sleeps the sensors accordingly.
+     *
+     * >>> FIRMWARE TODO: add this Write characteristic to the WombCare service and handle
+     *     the two commands (wake sensors on 0x01, sleep on 0x00). Until it exists the app
+     *     simply skips the write — a device with only BTN0 keeps working unchanged.
+     */
+    val CONTROL: UUID = UUID.fromString("e1c1eb41-11fe-413a-892c-739648b001c1")
+
+    const val CMD_STOP_MONITORING: Byte = 0x00
+    const val CMD_START_MONITORING: Byte = 0x01
+
     val ACCEPTED_SERVICES: List<UUID> = listOf(SERVICE, SERVICE_LEGACY)
     val ACCEPTED_CLINICAL_UPDATE: List<UUID> = listOf(CLINICAL_UPDATE, CLINICAL_UPDATE_LEGACY)
 

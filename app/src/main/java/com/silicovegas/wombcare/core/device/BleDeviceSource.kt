@@ -64,6 +64,7 @@ class BleDeviceSource(
 
     private var gatt: BluetoothGatt? = null
     private var scanning = false
+    private var controlChar: BluetoothGattCharacteristic? = null
 
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT])
     override fun connect(deviceId: String?) {
@@ -160,6 +161,9 @@ class BleDeviceSource(
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+            // Remember the control characteristic (may be absent on BTN0-only firmware).
+            controlChar = findControl(g)
+
             val characteristic = findClinicalUpdate(g) ?: run {
                 _connectionState.value = ConnectionState.Failed("clinical update characteristic not found")
                 return
@@ -171,6 +175,14 @@ class BleDeviceSource(
                 @Suppress("DEPRECATION")
                 g.writeDescriptor(cccd)
             }
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            // CCCD write finished → notifications are on. BLE allows one op at a time, so this
+            // is the safe moment to ask the device to START monitoring (replacing BTN0). No-op
+            // if the firmware doesn't expose the control characteristic yet.
+            writeControl(g, WombCareGatt.CMD_START_MONITORING)
         }
 
         @Deprecated("Deprecated in API 33; kept for broad device support")
@@ -199,6 +211,39 @@ class BleDeviceSource(
         return null
     }
 
+    private fun findControl(g: BluetoothGatt): BluetoothGattCharacteristic? {
+        for (service in g.services) {
+            if (service.uuid !in WombCareGatt.ACCEPTED_SERVICES) continue
+            service.getCharacteristic(WombCareGatt.CONTROL)?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * Write a start/stop command to the control characteristic — the app-side of replacing
+     * BTN0. Safe no-op when the characteristic is absent (BTN0-only firmware), so this never
+     * breaks a device that doesn't support it yet. Handles the API 33 write-signature split.
+     */
+    @SuppressLint("MissingPermission")
+    private fun writeControl(g: BluetoothGatt, cmd: Byte) {
+        val c = controlChar ?: return
+        val payload = byteArrayOf(cmd)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                g.writeCharacteristic(c, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            } else {
+                @Suppress("DEPRECATION")
+                c.value = payload
+                @Suppress("DEPRECATION")
+                c.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(c)
+            }
+        } catch (e: SecurityException) {
+            // Permission is requested upstream; ignore here rather than crash.
+        }
+    }
+
     private fun publish(bytes: ByteArray?) {
         when (val r = ClinicalUpdateParser.parse(bytes, System.currentTimeMillis())) {
             is ClinicalUpdateParseResult.Success -> {
@@ -218,6 +263,10 @@ class BleDeviceSource(
             scanning = false
             ad.bluetoothLeScanner?.stopScan(scanCallback)
         }
+        // Best-effort: tell the device to STOP monitoring (mirrors BTN0 off) before we drop
+        // the link. Firmware should also sleep sensors on disconnect as a fallback.
+        gatt?.let { writeControl(it, WombCareGatt.CMD_STOP_MONITORING) }
+        controlChar = null
         gatt?.disconnect()
         gatt?.close()
         gatt = null
