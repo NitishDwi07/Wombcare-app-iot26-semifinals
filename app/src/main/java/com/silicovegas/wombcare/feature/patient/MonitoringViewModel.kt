@@ -76,7 +76,13 @@ class MonitoringViewModel @Inject constructor(
     /** Whether starting now will open a real Bluetooth connection (needs BLE permissions). */
     fun usesRealBle(): Boolean = sourceProvider.isRealDevice()
 
-    fun start() {
+    /**
+     * Start a session. [deviceId] is the Bluetooth address the user picked in the scan
+     * screen; null means "demo mode" (the simulator ignores it) or "scan for one" (the BLE
+     * source falls back to a filtered scan). Passing a specific address skips scanning and
+     * connects straight to the chosen device.
+     */
+    fun start(deviceId: String? = null) {
         if (readingJob?.isActive == true) return
         val src = sourceProvider.current()
         source = src
@@ -107,7 +113,7 @@ class MonitoringViewModel @Inject constructor(
                 }
             }
         }
-        src.connect()
+        src.connect(deviceId)
     }
 
     fun stop() {
