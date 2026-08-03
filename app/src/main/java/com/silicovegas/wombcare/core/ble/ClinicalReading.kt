@@ -56,12 +56,42 @@ data class ClinicalReading(
     /** Confidence is untrustworthy while the mother is moving; the UI must say so. */
     val confidenceIsTrustworthy: Boolean get() = !signalLow
 
+    /**
+     * Motion shown to the user.
+     *
+     * - If the device sends an explicit motion byte (payload v2), trust it.
+     * - Otherwise (v1, the current firmware) DERIVE it from [confidencePercent].
+     *   Confidence = ML confidence × IMU trust, and maternal movement pulls IMU trust — and
+     *   therefore confidence — down (this is also stated in the BLE spec: "if motion is
+     *   WALKING, confidence will be low because the signal is unreliable during movement").
+     *   So high confidence ⇒ still, lower ⇒ movement. This keeps the payload at 8 bytes —
+     *   no extra IMU bytes on the wire — and does the contextualising on the phone, which is
+     *   the only place with the thresholds. The [signalLow] flag, when the firmware sets it,
+     *   is a direct "movement/unreliable" signal and forces WALKING.
+     *
+     *   NOTE: this is an approximation — confidence also drops on genuine ML uncertainty, not
+     *   only movement. A dedicated motion byte (v2) is more precise; until then this is the
+     *   honest best-effort from the bytes we have.
+     */
     val motionDisplay: MotionDisplay
         get() = when (motionState) {
             MotionState.RESTING -> MotionDisplay.RESTING
             MotionState.SITTING -> MotionDisplay.SITTING
             MotionState.WALKING -> MotionDisplay.WALKING
             MotionState.UNKNOWN -> MotionDisplay.UNKNOWN
-            null -> if (motherActive) MotionDisplay.ACTIVE else MotionDisplay.RESTING
+            null -> when {
+                isPlaceholder -> MotionDisplay.UNKNOWN
+                signalLow -> MotionDisplay.WALKING
+                confidencePercent >= MOTION_RESTING_MIN_CONFIDENCE -> MotionDisplay.RESTING
+                confidencePercent >= MOTION_SITTING_MIN_CONFIDENCE -> MotionDisplay.SITTING
+                else -> MotionDisplay.WALKING
+            }
         }
+
+    private companion object {
+        /** Confidence at/above this ⇒ still (Resting). */
+        const val MOTION_RESTING_MIN_CONFIDENCE = 85
+        /** Confidence in [SITTING_MIN, RESTING_MIN) ⇒ slight movement (Sitting). Below ⇒ Walking. */
+        const val MOTION_SITTING_MIN_CONFIDENCE = 65
+    }
 }
