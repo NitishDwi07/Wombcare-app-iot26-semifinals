@@ -101,14 +101,18 @@ class ClinicalUpdateParserTest {
     }
 
     @Test
-    fun `v1 has no motion or battery and reports motion from the active flag`() {
-        val resting = success(v1(flags = 0x00))
+    fun `v1 has no motion or battery and derives motion from confidence`() {
+        // No motion byte in v1 → motion is inferred from confidence (movement lowers it).
+        val resting = success(v1(confidence = 90, flags = 0x00))
         assertNull(resting.motionState)
         assertNull(resting.batteryPercent)
-        assertEquals(MotionDisplay.RESTING, resting.motionDisplay)
+        assertEquals(MotionDisplay.RESTING, resting.motionDisplay)   // >= 85
 
-        val active = success(v1(flags = 0x04))
-        assertEquals(MotionDisplay.ACTIVE, active.motionDisplay)
+        assertEquals(MotionDisplay.SITTING, success(v1(confidence = 70)).motionDisplay) // 65..84
+        assertEquals(MotionDisplay.WALKING, success(v1(confidence = 40)).motionDisplay) // < 65
+
+        // The SIGNAL_LOW flag (0x02) forces WALKING even when confidence is high.
+        assertEquals(MotionDisplay.WALKING, success(v1(confidence = 95, flags = 0x02)).motionDisplay)
     }
 
     @Test
