@@ -194,3 +194,39 @@ any connection that has not bonded with the passkey.
 - **A nearby attacker:** can see the device advertising but the encrypted characteristic
   refuses to deliver data without the bond → gets nothing.
 - **Demo mode is unaffected** — the simulator uses no BLE, so demos need no pairing.
+
+---
+
+## 8. Control characteristic — app-driven start/stop (replaces BTN0)
+
+So the mother can start monitoring from the **app** instead of pressing BTN0 on the device.
+The app side is implemented; the firmware side must be added in **`Wombcare_6PreFinal`**.
+
+| Property | Value |
+|---|---|
+| Characteristic | `Control` — **Write** |
+| UUID | `e1c1eb41-11fe-413a-892c-739648b001c1` (in the WombCare service; app: `WombCareGatt.CONTROL`) |
+| Command: start | `0x01` (`CMD_START_MONITORING`) — wake sensors, begin a session |
+| Command: stop | `0x00` (`CMD_STOP_MONITORING`) — sleep sensors |
+
+**App behaviour (done):** on connect, after enabling notifications, `BleDeviceSource` writes
+`0x01`; on Stop/disconnect it writes `0x00` (best-effort). If the characteristic is absent
+(BTN0-only firmware) the app skips the write — nothing breaks.
+
+**Firmware TODO (`Wombcare_6PreFinal`):**
+1. Add a Write characteristic with the UUID above to the WombCare service in
+   `config/btconf/gatt_configuration.btconf` (id `control` → `gattdb_control`).
+2. In `wombcare_ble.c`, handle `sl_bt_evt_gatt_server_attribute_value` for it: on `0x01` set
+   `s_monitoring_requested = true` (the same flag BTN0 flips in `app.c`); on `0x00` set it false.
+3. Keep BTN0 working too — the two just drive the same request flag.
+4. Mark it `encrypted="true"` like Clinical Update (§7), so only a bonded phone can control it.
+
+### Related: "send the previous reading immediately" (point 2)
+
+The firmware already notifies the last-known payload on CCCD subscribe (`wombcare_ble.c`), so
+a reconnecting phone sees data instantly — only the very first 60 s after power-on has no
+value yet (the device needs a full minute to compute the first result). If you also want the
+device to *refresh the last value every second* between the 1-minute computations (so the
+screen always looks live), add a 1 s sleeptimer in `Wombcare_6PreFinal` that re-sends
+`s_last_payload`. The app already renders whatever cadence the device sends — no app change
+needed.
