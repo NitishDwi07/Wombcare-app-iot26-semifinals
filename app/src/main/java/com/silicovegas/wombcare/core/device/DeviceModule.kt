@@ -48,4 +48,7 @@ class DeviceSourceProvider @javax.inject.Inject constructor(
     private val prefs: DeviceModePreference,
 ) {
     fun current(): WombCareDeviceSource = if (prefs.isDemoMode()) simulated else ble
+
+    /** True when the next connect will use real Bluetooth (so BLE permissions are needed). */
+    fun isRealDevice(): Boolean = !prefs.isDemoMode()
 }

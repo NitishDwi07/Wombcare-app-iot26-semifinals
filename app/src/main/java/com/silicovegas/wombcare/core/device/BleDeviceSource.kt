@@ -95,7 +95,15 @@ class BleDeviceSource(
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        scanner.startScan(filters, settings, scanCallback)
+        // Defence in depth: the caller requests BLUETOOTH_SCAN before connecting, but if it
+        // is ever missing we surface a state instead of crashing the app (the SecurityException
+        // that "keeps stopping" the app came from here).
+        try {
+            scanner.startScan(filters, settings, scanCallback)
+        } catch (e: SecurityException) {
+            scanning = false
+            _connectionState.value = ConnectionState.PermissionRequired
+        }
     }
 
     private val scanCallback = object : ScanCallback() {
@@ -117,7 +125,11 @@ class BleDeviceSource(
     @SuppressLint("MissingPermission")
     private fun openGatt(device: BluetoothDevice) {
         _connectionState.value = ConnectionState.Connecting
-        gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        try {
+            gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } catch (e: SecurityException) {
+            _connectionState.value = ConnectionState.PermissionRequired
+        }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {

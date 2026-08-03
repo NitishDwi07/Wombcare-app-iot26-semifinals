@@ -1,9 +1,11 @@
 package com.silicovegas.wombcare.feature.patient
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +33,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,18 +65,41 @@ fun PatientDashboardScreen(
     vm: MonitoringViewModel = hiltViewModel(),
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
-    // Ask for notification permission (13+) so a Pathologic alert can reach her with the
-    // app backgrounded. Requested lazily on first Start rather than at launch.
-    val notifPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* result irrelevant here; notifier degrades gracefully if denied */ }
+    fun isGranted(p: String) =
+        ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+
+    // The Bluetooth permissions a REAL-device session needs. Android 12+ split BLUETOOTH
+    // into runtime SCAN/CONNECT; ≤11 uses location for BLE scanning. Demo mode needs none.
+    fun blePermissions(): List<String> = when {
+        !vm.usesRealBle() -> emptyList()
+        Build.VERSION.SDK_INT >= 31 -> listOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT,
+        )
+        else -> listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    // Notifications (13+) are nice-to-have; the BLE permissions are start-critical.
+    fun requiredPermissions(): List<String> = buildList {
+        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        addAll(blePermissions())
+    }
+
+    fun bleReady(): Boolean = blePermissions().all { isGranted(it) }
+
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        // Start only once the BLE permissions are actually granted (notifications optional).
+        // Without this guard, a real-device start would crash in startScan().
+        if (bleReady()) vm.start()
+    }
 
     fun startMonitoring() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        vm.start()
+        val missing = requiredPermissions().filter { !isGranted(it) }
+        if (missing.isEmpty()) vm.start() else permLauncher.launch(missing.toTypedArray())
     }
 
     Scaffold(

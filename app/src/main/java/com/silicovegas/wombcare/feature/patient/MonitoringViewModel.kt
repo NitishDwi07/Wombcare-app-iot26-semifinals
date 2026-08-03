@@ -73,6 +73,9 @@ class MonitoringViewModel @Inject constructor(
     private var readingJob: Job? = null
     private var stateJob: Job? = null
 
+    /** Whether starting now will open a real Bluetooth connection (needs BLE permissions). */
+    fun usesRealBle(): Boolean = sourceProvider.isRealDevice()
+
     fun start() {
         if (readingJob?.isActive == true) return
         val src = sourceProvider.current()
