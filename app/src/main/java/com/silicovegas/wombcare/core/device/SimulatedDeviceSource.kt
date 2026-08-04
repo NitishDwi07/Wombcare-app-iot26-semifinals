@@ -89,6 +89,9 @@ class SimulatedDeviceSource(
         _connectionState.value = ConnectionState.Idle
     }
 
+    /** No bond in demo mode — forget is just a disconnect. */
+    override fun forget() = disconnect()
+
     /** Encode → decode through the production parser, then publish the reading. */
     private suspend fun emit(bytes: ByteArray) {
         when (val r = ClinicalUpdateParser.parse(bytes, now())) {

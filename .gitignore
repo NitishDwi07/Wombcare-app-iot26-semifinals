@@ -29,3 +29,6 @@ database-debug.log
 # Built APK served for download (large binary; rebuild instead of committing)
 /public/wombcare-download
 *.apk
+
+# Kotlin compiler daemon session artifacts (churn every build)
+.kotlin/

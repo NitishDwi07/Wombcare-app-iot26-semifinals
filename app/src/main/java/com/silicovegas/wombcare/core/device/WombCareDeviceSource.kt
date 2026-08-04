@@ -23,6 +23,14 @@ interface WombCareDeviceSource {
 
     fun disconnect()
 
+    /**
+     * Disconnect AND remove the Bluetooth bond, so the NEXT connection re-runs pairing and
+     * prompts for the PIN again. This is the "Forget device" action — without it, once paired
+     * the phone silently reuses the bond forever and you can neither re-enter the PIN nor
+     * cleanly switch to a different unit.
+     */
+    fun forget()
+
     /** Human label for settings/debug ("WombCare device" vs "Demo mode"). */
     val sourceLabel: String
 }

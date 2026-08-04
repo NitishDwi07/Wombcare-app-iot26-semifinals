@@ -42,6 +42,7 @@ fun SettingsScreen(
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val demoMode by vm.demoMode.collectAsStateWithLifecycle()
+    val deviceForgotten by vm.deviceForgotten.collectAsStateWithLifecycle()
     val deleteState by vm.deleteState.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -101,6 +102,24 @@ fun SettingsScreen(
                     Spacer(Modifier.height(Spacing.sm))
                     Switch(checked = demoMode, onCheckedChange = vm::setDemoMode)
                 }
+
+                Spacer(Modifier.height(Spacing.lg))
+                Text(
+                    if (deviceForgotten) {
+                        "Device forgotten — reconnect from the dashboard and you'll be asked " +
+                            "for the PIN again."
+                    } else {
+                        "Forget the paired device to connect a different one, or to re-enter " +
+                            "the PIN. You'll pick and pair again next time you start."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DangerButton(
+                    if (deviceForgotten) "Device forgotten" else "Forget device",
+                    onClick = vm::forgetDevice,
+                    enabled = !deviceForgotten,
+                )
             }
 
             SectionCard(title = "Account") {
