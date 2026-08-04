@@ -124,6 +124,19 @@ class MonitoringViewModel @Inject constructor(
         _ui.update { MonitoringUiState() }
     }
 
+    /**
+     * Forget the paired device: stop, then remove the bond so the next connect re-prompts
+     * for the PIN. Resolves the current source directly (a session may not be running).
+     */
+    fun forgetDevice() {
+        val src = source ?: sourceProvider.current()
+        src.forget()
+        readingJob?.cancel(); readingJob = null
+        stateJob?.cancel(); stateJob = null
+        engine.endSession()
+        _ui.update { MonitoringUiState() }
+    }
+
     override fun onCleared() {
         source?.disconnect()
     }

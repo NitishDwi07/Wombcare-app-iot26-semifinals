@@ -312,6 +312,29 @@ class BleDeviceSource(
         }
     }
 
+    /**
+     * "Forget device": disconnect, then remove the bond so the next connect re-prompts for
+     * the PIN. Android has no public unpair API, so the bond is removed via the standard
+     * `removeBond()` reflection call — done both on the currently-connected device and on any
+     * already-bonded "WombCare" device (so it works even when not currently connected).
+     */
+    @SuppressLint("MissingPermission")
+    override fun forget() {
+        val connected = gatt?.device
+        disconnect()
+        connected?.let { removeBond(it) }
+        // Also clear any lingering bond for a WombCare unit we're not connected to right now.
+        runCatching {
+            adapter?.bondedDevices
+                ?.filter { it.name?.contains("womb", ignoreCase = true) == true }
+                ?.forEach { removeBond(it) }
+        }
+    }
+
+    private fun removeBond(device: BluetoothDevice) {
+        runCatching { device.javaClass.getMethod("removeBond").invoke(device) }
+    }
+
     @SuppressLint("MissingPermission")
     override fun disconnect() {
         val ad = adapter

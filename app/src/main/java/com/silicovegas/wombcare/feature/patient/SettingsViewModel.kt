@@ -6,6 +6,7 @@ import com.silicovegas.wombcare.core.data.AccountRepository
 import com.silicovegas.wombcare.core.data.AuthRepository
 import com.silicovegas.wombcare.core.data.DeviceModePreference
 import com.silicovegas.wombcare.core.data.model.UserRole
+import com.silicovegas.wombcare.core.device.DeviceSourceProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +26,20 @@ class SettingsViewModel @Inject constructor(
     private val deviceMode: DeviceModePreference,
     private val auth: AuthRepository,
     private val account: AccountRepository,
+    private val deviceSourceProvider: DeviceSourceProvider,
 ) : ViewModel() {
 
     private val _demoMode = MutableStateFlow(deviceMode.isDemoMode())
     val demoMode: StateFlow<Boolean> = _demoMode.asStateFlow()
+
+    private val _deviceForgotten = MutableStateFlow(false)
+    val deviceForgotten: StateFlow<Boolean> = _deviceForgotten.asStateFlow()
+
+    /** Remove the Bluetooth bond so the next connect re-prompts for the PIN. */
+    fun forgetDevice() {
+        deviceSourceProvider.current().forget()
+        _deviceForgotten.value = true
+    }
 
     private val _deleteState = MutableStateFlow<DeleteState>(DeleteState.Idle)
     val deleteState: StateFlow<DeleteState> = _deleteState.asStateFlow()
