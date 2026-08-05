@@ -18,7 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Speed
@@ -41,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.R
 import com.silicovegas.wombcare.core.ble.ConnectionState
 import com.silicovegas.wombcare.core.ble.MotionDisplay
+import com.silicovegas.wombcare.core.device.statsOf
 import com.silicovegas.wombcare.core.ui.components.ConnectionChip
 import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
@@ -160,6 +163,9 @@ fun PatientDashboardScreen(
             }
 
             val latest = ui.session?.latest?.takeIf { !it.isPlaceholder }
+            val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
+            val stats = statsOf(readings)
+
             StatusHeroCard(
                 status = latest?.status ?: com.silicovegas.wombcare.core.ble.WellnessStatus.NORMAL,
                 waiting = ui.waitingForFirstReading,
@@ -171,7 +177,12 @@ fun PatientDashboardScreen(
                 },
             )
 
-            // Six tiles.
+            // Real-time inference status — share of the session in each class (real numbers).
+            if (readings.isNotEmpty()) {
+                InferenceStatusCard(stats)
+            }
+
+            // Summary KPIs — the mother's "daily overview" tiles.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = stringResource(R.string.label_fhr),
@@ -190,7 +201,7 @@ fun PatientDashboardScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
-                    label = stringResource(R.string.label_confidence),
+                    label = "AI confidence",
                     value = latest?.confidencePercent?.toString(),
                     unit = stringResource(R.string.unit_percent),
                     icon = Icons.Rounded.Speed,
@@ -201,17 +212,32 @@ fun PatientDashboardScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
+                    label = "Device battery",
+                    value = latest?.batteryPercent?.toString(),
+                    unit = stringResource(R.string.unit_percent),
+                    icon = Icons.Rounded.BatteryFull,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StatTile(
                     label = stringResource(R.string.label_motion),
                     value = latest?.let { motionWord(it.motionDisplay) },
                     icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
                     valueStyle = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
                 )
+                StatTile(
+                    label = "Session length",
+                    value = if (readings.isEmpty()) null else stats.durationMinutes.toString(),
+                    unit = "min",
+                    icon = Icons.Rounded.Schedule,
+                    valueStyle = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f),
+                )
             }
-            BatteryCard(percent = latest?.batteryPercent)
 
             // Numbers first, then charts — only once there's something real to show.
-            val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
             if (readings.isNotEmpty()) {
                 SessionSummaryCard(readings)
                 SectionCard(title = "Heart rate") {

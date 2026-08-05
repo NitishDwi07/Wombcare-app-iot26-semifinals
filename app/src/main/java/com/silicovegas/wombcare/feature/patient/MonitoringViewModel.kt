@@ -130,7 +130,7 @@ class MonitoringViewModel @Inject constructor(
      */
     fun forgetDevice() {
         val src = source ?: sourceProvider.current()
-        src.forget()
+        src.forget() // Settings surfaces the manual-unpair fallback; here we just tear down.
         readingJob?.cancel(); readingJob = null
         stateJob?.cancel(); stateJob = null
         engine.endSession()

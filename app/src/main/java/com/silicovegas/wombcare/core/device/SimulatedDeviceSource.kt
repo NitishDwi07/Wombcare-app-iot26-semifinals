@@ -89,8 +89,11 @@ class SimulatedDeviceSource(
         _connectionState.value = ConnectionState.Idle
     }
 
-    /** No bond in demo mode — forget is just a disconnect. */
-    override fun forget() = disconnect()
+    /** No bond in demo mode — forget is just a disconnect, and always "succeeds". */
+    override fun forget(): Boolean {
+        disconnect()
+        return true
+    }
 
     /** Encode → decode through the production parser, then publish the reading. */
     private suspend fun emit(bytes: ByteArray) {

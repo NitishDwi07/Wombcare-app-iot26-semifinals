@@ -12,7 +12,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SportsSoccer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,8 +30,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.core.ble.WellnessStatus
 import com.silicovegas.wombcare.core.ble.WombCareGatt
+import com.silicovegas.wombcare.core.device.statsOf
+import com.silicovegas.wombcare.core.ui.components.BigNumber
 import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
 import com.silicovegas.wombcare.core.ui.components.EmptyState
+import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.components.StatTile
 import com.silicovegas.wombcare.core.ui.components.StatusHeroCard
 import com.silicovegas.wombcare.core.ui.theme.Spacing
@@ -85,38 +90,67 @@ fun DoctorPatientDetailScreen(
                 waiting = live == null,
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                StatTile(
-                    label = "Fetal heart rate",
-                    value = live?.fhrBpm?.toString(),
-                    unit = "BPM",
-                    icon = Icons.Rounded.MonitorHeart,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    label = "Kicks",
-                    value = (live?.kickTotal ?: 0).toString(),
-                    unit = "this session",
-                    icon = Icons.Rounded.SportsSoccer,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            if (readings.isNotEmpty()) {
-                com.silicovegas.wombcare.feature.patient.SessionSummaryCard(readings)
-                com.silicovegas.wombcare.core.ui.components.SectionCard(title = "Heart rate") {
-                    FhrTrendChart(readings)
-                    Spacer(Modifier.height(Spacing.sm))
-                    NspTimelineStrip(readings)
-                }
-                com.silicovegas.wombcare.feature.patient.KickSummaryCard(readings)
-            } else {
+            if (readings.isEmpty()) {
                 EmptyState(
                     title = "No readings in this session yet",
                     message = "When the patient is monitoring, her readings will appear here " +
                         "each minute.",
                 )
+                DisclaimerFootnote()
+                return@Column
             }
+
+            val latestReading = readings.lastOrNull()
+            val stats = statsOf(readings)
+
+            // LB — Baseline Fetal Heart Rate, with the live waveform + NSP timeline beneath.
+            SectionCard(title = "Baseline fetal heart rate (LB)") {
+                BigNumber(
+                    value = (latestReading?.fhrBpm ?: stats.averageFhr)?.toString(),
+                    unit = "BPM",
+                )
+                Spacer(Modifier.height(Spacing.sm))
+                FhrTrendChart(readings)
+                Spacer(Modifier.height(Spacing.sm))
+                NspTimelineStrip(readings)
+            }
+
+            // The values the device actually transmits: FHR, kicks (FM), AI confidence.
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StatTile(
+                    label = "Fetal heart rate",
+                    value = latestReading?.fhrBpm?.toString(),
+                    unit = "BPM",
+                    icon = Icons.Rounded.MonitorHeart,
+                    modifier = Modifier.weight(1f),
+                )
+                StatTile(
+                    label = "Fetal movements",
+                    value = (live?.kickTotal ?: stats.totalKicks).toString(),
+                    unit = "kicks",
+                    icon = Icons.Rounded.SportsSoccer,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StatTile(
+                    label = "AI confidence",
+                    value = latestReading?.confidencePercent?.toString(),
+                    unit = "%",
+                    icon = Icons.Rounded.Speed,
+                    modifier = Modifier.weight(1f),
+                )
+                StatTile(
+                    label = "Device battery",
+                    value = latestReading?.batteryPercent?.toString(),
+                    unit = "%",
+                    icon = Icons.Rounded.BatteryFull,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            com.silicovegas.wombcare.feature.patient.SessionSummaryCard(readings)
+            com.silicovegas.wombcare.feature.patient.KickSummaryCard(readings)
 
             DisclaimerFootnote()
         }

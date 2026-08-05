@@ -28,8 +28,13 @@ interface WombCareDeviceSource {
      * prompts for the PIN again. This is the "Forget device" action — without it, once paired
      * the phone silently reuses the bond forever and you can neither re-enter the PIN nor
      * cleanly switch to a different unit.
+     *
+     * Returns `true` if the bond was removed (or there was nothing bonded to remove), `false`
+     * if the OS blocked the removal — Android 13+ silently rejects the private `removeBond`
+     * reflection, so the caller must then send the user to system Bluetooth settings to unpair
+     * "WombCare" by hand. The demo source has no bond and always returns `true`.
      */
-    fun forget()
+    fun forget(): Boolean
 
     /** Human label for settings/debug ("WombCare device" vs "Demo mode"). */
     val sourceLabel: String
