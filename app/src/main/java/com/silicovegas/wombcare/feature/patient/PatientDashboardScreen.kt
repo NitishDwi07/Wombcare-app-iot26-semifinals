@@ -46,6 +46,7 @@ import com.silicovegas.wombcare.core.ble.MotionDisplay
 import com.silicovegas.wombcare.core.device.statsOf
 import com.silicovegas.wombcare.core.ui.components.ConnectionChip
 import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
+import com.silicovegas.wombcare.core.ui.components.FormError
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
 import com.silicovegas.wombcare.core.ui.components.SecondaryButton
 import com.silicovegas.wombcare.core.ui.components.SectionCard
@@ -248,11 +249,18 @@ fun PatientDashboardScreen(
                 KickSummaryCard(readings)
             }
 
+            // If the link dropped unexpectedly, show WHY (with the GATT code) so a real
+            // dropout is never mistaken for "never connected".
+            (ui.connection as? ConnectionState.Failed)?.let { FormError(it.reason) }
+
             Spacer(Modifier.height(Spacing.sm))
-            if (ui.connection == ConnectionState.Idle) {
-                PrimaryButton("Start monitoring", onClick = ::startMonitoring)
-            } else {
+            val c = ui.connection
+            val busy = c == ConnectionState.Scanning || c == ConnectionState.Connecting ||
+                c == ConnectionState.Pairing || c.isLive || c == ConnectionState.SignalLost
+            if (busy) {
                 SecondaryButton("Stop", onClick = vm::stop)
+            } else {
+                PrimaryButton("Start monitoring", onClick = ::startMonitoring)
             }
 
             DisclaimerFootnote()

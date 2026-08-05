@@ -66,6 +66,10 @@ class BleDeviceSource(
     private var scanning = false
     private var controlChar: BluetoothGattCharacteristic? = null
 
+    /** True only for a disconnect WE initiated (Stop/Forget), so an unexpected drop by the
+     *  radio/firmware is reported as a fault instead of a clean idle. */
+    @Volatile private var userInitiatedDisconnect = false
+
     /** CCCD subscriptions still to enable (Android runs GATT ops one at a time). */
     private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
 
@@ -79,6 +83,7 @@ class BleDeviceSource(
             _connectionState.value = ConnectionState.BluetoothOff
             return
         }
+        userInitiatedDisconnect = false // any drop before the next Stop is unexpected
         // A known device can be connected directly; otherwise scan for the service.
         if (deviceId != null) {
             runCatching { ad.getRemoteDevice(deviceId) }.getOrNull()?.let { openGatt(it); return }
@@ -158,9 +163,18 @@ class BleDeviceSource(
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    _connectionState.value = ConnectionState.Idle
                     g.close()
                     gatt = null
+                    // A clean disconnect the user asked for → Idle (ready to start again).
+                    // An UNEXPECTED drop → Failed, carrying the GATT status so we can tell
+                    // whose fault it is: a link dropping ~60 s in with no data is almost
+                    // always the device (supervision timeout while the DSP/ML runs, or the
+                    // firmware closing the link), not the app — the app has no give-up timer.
+                    _connectionState.value = if (userInitiatedDisconnect) {
+                        ConnectionState.Idle
+                    } else {
+                        ConnectionState.Failed(disconnectReason(status))
+                    }
                 }
             }
         }
@@ -358,8 +372,33 @@ class BleDeviceSource(
         runCatching { device.javaClass.getMethod("removeBond").invoke(device) as? Boolean }
             .getOrNull() ?: false
 
+    /**
+     * Human-readable cause for an unexpected disconnect, keyed by the GATT status. The raw
+     * code is kept in the text on purpose — it's the single most useful fact for deciding
+     * whether a dropout is the app, the radio, or the firmware.
+     *
+     *  8  (0x08) supervision timeout — the device stopped responding (out of range, asleep,
+     *            or the firmware stalled the BLE stack, e.g. during the 60 s DSP/ML step).
+     *  19 (0x13) the device deliberately closed the connection.
+     *  22 (0x16) the connection was terminated by the local host.
+     *  62 (0x3E) failed to establish (never fully connected).
+     *  133(0x85) generic GATT error — usually a flaky link; retry.
+     */
+    private fun disconnectReason(status: Int): String = when (status) {
+        0 -> "Device ended the connection"
+        8 -> "Signal lost (0x08) — device out of range, or it stopped responding while " +
+            "processing. If it drops ~1 min in, the firmware is likely stalling the BLE " +
+            "stack during the 60 s window."
+        19 -> "Device closed the connection (0x13)"
+        22 -> "Connection ended (0x16)"
+        62 -> "Couldn't establish the connection (0x3E) — move closer and retry"
+        133 -> "Connection error (0x85) — retry"
+        else -> "Disconnected (status $status)"
+    }
+
     @SuppressLint("MissingPermission")
     override fun disconnect() {
+        userInitiatedDisconnect = true // we're closing it on purpose; don't report a fault
         val ad = adapter
         if (scanning && ad != null) {
             scanning = false
