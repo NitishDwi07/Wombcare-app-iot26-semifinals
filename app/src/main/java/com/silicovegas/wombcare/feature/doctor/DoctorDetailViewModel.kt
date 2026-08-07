@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.silicovegas.wombcare.core.ble.ClinicalReading
 import com.silicovegas.wombcare.core.data.DoctorRepository
 import com.silicovegas.wombcare.core.data.model.LiveStatus
+import com.silicovegas.wombcare.core.data.model.SessionSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,7 @@ data class DoctorDetailUiState(
     val patientUid: String = "",
     val live: LiveStatus? = null,
     val readings: List<ClinicalReading> = emptyList(),
+    val sessions: List<SessionSummary> = emptyList(),
 )
 
 /**
@@ -58,6 +60,12 @@ class DoctorDetailViewModel @Inject constructor(
             }
             .catch { }
             .onEach { readings -> _ui.value = _ui.value.copy(readings = readings) }
+            .launchIn(viewModelScope)
+
+        // Session history for the trends card (cheap per-session summaries, not readings).
+        doctorRepo.recentSessions(patientUid)
+            .catch { }
+            .onEach { sessions -> _ui.value = _ui.value.copy(sessions = sessions) }
             .launchIn(viewModelScope)
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Speed
@@ -106,9 +107,12 @@ fun PatientDashboardScreen(
 
     fun bleReady(): Boolean = blePermissions().all { isGranted(it) }
 
-    // Real device → open the scan/picker screen; demo → start the simulator directly.
+    // Real device → reconnect straight to the remembered device if we have one (no re-scan,
+    // and the bond persists so no PIN); otherwise open the scan/picker. Demo → start directly.
     fun proceedToMonitoring() {
-        if (vm.usesRealBle()) onOpenScan() else vm.start()
+        if (!vm.usesRealBle()) { vm.start(); return }
+        val remembered = vm.rememberedDeviceId()
+        if (remembered != null) vm.start(remembered) else onOpenScan()
     }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -172,7 +176,7 @@ fun PatientDashboardScreen(
                 waiting = ui.waitingForFirstReading,
                 subtitle = when {
                     ui.waitingForFirstReading -> stringResource(R.string.note_first_window)
-                    ui.session != null -> "${ui.session!!.windowCount} min · worst " +
+                    ui.session != null -> formatDuration(ui.session!!.windowCount) + " · worst " +
                         statusWord(ui.session!!.worstStatus)
                     else -> null
                 },
@@ -181,6 +185,21 @@ fun PatientDashboardScreen(
             // Real-time inference status — share of the session in each class (real numbers).
             if (readings.isNotEmpty()) {
                 InferenceStatusCard(stats)
+            }
+
+            // Gentle, actionable guidance when the device is live but the signal is poor —
+            // so a blank FHR reads as "fix the sensor", not "something is wrong with baby".
+            if (ui.connection.isLive && !ui.waitingForFirstReading && latest != null) {
+                when {
+                    latest.fhrBpm == null -> SensorHint(
+                        "No fetal heartbeat detected. Reposition the sensor on your belly and " +
+                            "hold still for a few seconds.",
+                    )
+                    latest.signalLow -> SensorHint(
+                        "Weak signal. Adjust the sensor so it sits snugly, and stay still for " +
+                            "a clearer reading.",
+                    )
+                }
             }
 
             // Summary KPIs — the mother's "daily overview" tiles.
@@ -230,8 +249,7 @@ fun PatientDashboardScreen(
                 )
                 StatTile(
                     label = "Session length",
-                    value = if (readings.isEmpty()) null else stats.durationMinutes.toString(),
-                    unit = "min",
+                    value = if (readings.isEmpty()) null else formatDuration(stats.durationMinutes),
                     icon = Icons.Rounded.Schedule,
                     valueStyle = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
@@ -265,6 +283,52 @@ fun PatientDashboardScreen(
 
             DisclaimerFootnote()
             Spacer(Modifier.height(Spacing.lg))
+        }
+    }
+}
+
+/**
+ * Human duration from a whole number of minutes, rolling minutes up into hours (and hours
+ * into days) as they fill — so 60 min reads "1 hr", 90 min "1 hr 30 min", 1440 min "1 day".
+ */
+private fun formatDuration(minutes: Int): String {
+    if (minutes < 60) return "$minutes min"
+    val days = minutes / 1440
+    val hours = (minutes % 1440) / 60
+    val mins = minutes % 60
+    val parts = buildList {
+        if (days > 0) add("$days day" + if (days > 1) "s" else "")
+        if (hours > 0) add("$hours hr")
+        if (mins > 0) add("$mins min")
+    }
+    // Keep it to the two largest units so a tile never overflows (e.g. "1 day 3 hr").
+    return parts.take(2).joinToString(" ")
+}
+
+/** A soft, non-alarming guidance note (amber) for "fix the sensor" situations. */
+@Composable
+private fun SensorHint(message: String) {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(
+            com.silicovegas.wombcare.core.ui.theme.Radii.tile,
+        ),
+        color = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspectContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Icon(
+                Icons.Rounded.Sensors,
+                contentDescription = null,
+                tint = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspect,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
