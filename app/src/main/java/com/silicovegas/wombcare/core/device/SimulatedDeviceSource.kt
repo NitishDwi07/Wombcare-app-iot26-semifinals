@@ -4,6 +4,7 @@ import com.silicovegas.wombcare.core.ble.ClinicalReading
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParseResult
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParser
 import com.silicovegas.wombcare.core.ble.ConnectionState
+import com.silicovegas.wombcare.core.ble.WellnessStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,26 +62,49 @@ class SimulatedDeviceSource(
             while (isActive) {
                 delay(windowIntervalMillis)
                 val w = DemoScript.windowAt(minute)
-                // Emit payload v2 so demo mode shows Motion and Battery too — a slow, believable
-                // battery drain from ~92% rather than a static number.
+                // Emit payload v3 (the Wombcare_8PreFinal frame) so demo mode exercises the
+                // real 15-byte decode, including the CTG analytics and the explicit motion
+                // byte. Battery is injected onto the parsed reading to mimic the device's
+                // SEPARATE Battery Service channel (a slow, believable drain from ~92%).
                 val battery = (92 - minute / 4).coerceIn(70, 92)
+                val ctg = ctgFor(w)
                 emit(
-                    ClinicalUpdateFrame.v2(
+                    ClinicalUpdateFrame.v3(
                         nsp = w.nsp,
                         confidence = w.confidence,
                         fhrBpm = w.fhrBpm,
                         kickCount = w.kicksThisWindow,
                         deviceMinute = minute + 1, // 0 reserved for the subscribe frame
                         motionState = w.motionState,
-                        batteryPct = battery,
+                        meanHrBpm = ctg.meanHr,
+                        mstvBpm = ctg.mstv,
+                        mltvBpm = ctg.mltv,
+                        accelPerMin = ctg.accel,
+                        decelPerMin = ctg.decel,
+                        hrSdBpm = ctg.hrSd,
                         signalLow = w.signalLow,
-                        motherActive = w.motherActive,
                     ),
+                    batteryPercent = battery,
                 )
                 _connectionState.value = ConnectionState.Monitoring
                 minute++
             }
         }
+    }
+
+    /** Plausible CTG analytics for a demo window (bpm units), telling a coherent clinical
+     *  story: healthy windows have good variability + accelerations and no decelerations;
+     *  pathologic windows show reduced variability, decelerations and no accelerations. */
+    private data class Ctg(
+        val meanHr: Int, val accel: Double, val decel: Double,
+        val mstv: Double, val mltv: Double, val hrSd: Double,
+    )
+
+    private fun ctgFor(w: DemoWindow): Ctg = when (w.nsp) {
+        WellnessStatus.NORMAL -> Ctg(w.fhrBpm, accel = 3.0, decel = 0.0, mstv = 6.5, mltv = 12.0, hrSd = 4.5)
+        WellnessStatus.SUSPECT -> Ctg(w.fhrBpm, accel = 1.0, decel = 1.0, mstv = 3.5, mltv = 8.0, hrSd = 6.0)
+        WellnessStatus.PATHOLOGIC -> Ctg(w.fhrBpm, accel = 0.0, decel = 2.5, mstv = 1.5, mltv = 4.0, hrSd = 8.0)
+        WellnessStatus.UNKNOWN -> Ctg(w.fhrBpm, accel = 0.0, decel = 0.0, mstv = 0.0, mltv = 0.0, hrSd = 0.0)
     }
 
     override fun disconnect() {
@@ -95,10 +119,18 @@ class SimulatedDeviceSource(
         return true
     }
 
-    /** Encode → decode through the production parser, then publish the reading. */
-    private suspend fun emit(bytes: ByteArray) {
+    /**
+     * Encode → decode through the production parser, then publish the reading. [batteryPercent]
+     * is merged onto the decoded reading the same way [BleDeviceSource] merges the standard
+     * Battery Service value — the v3 payload itself never carries battery.
+     */
+    private suspend fun emit(bytes: ByteArray, batteryPercent: Int? = null) {
         when (val r = ClinicalUpdateParser.parse(bytes, now())) {
-            is ClinicalUpdateParseResult.Success -> _readings.emit(r.reading)
+            is ClinicalUpdateParseResult.Success ->
+                _readings.emit(
+                    if (batteryPercent != null) r.reading.copy(batteryPercent = batteryPercent)
+                    else r.reading,
+                )
             else -> Unit // the simulator only ever produces valid frames; ignore otherwise
         }
     }

@@ -39,6 +39,23 @@ data class ClinicalReading(
     val batteryPercent: Int?,
     /** Phone wall clock at receipt — authoritative for display and storage. */
     val receivedAtEpochMillis: Long,
+    /**
+     * Extended CTG analytics — TRANSMITTED as of payload v3 (firmware Wombcare_8PreFinal),
+     * decoded to their real units here. Null on v1/v2 devices, and null on any window the
+     * device flagged as a sensor fault (the values would be meaningless zeros). See
+     * docs/BLE_CONTRACT.md §5.
+     */
+    val meanHrBpm: Int? = null,
+    /** Mean short-term variability, bpm. */
+    val mstvBpm: Double? = null,
+    /** Mean long-term variability, bpm. */
+    val mltvBpm: Double? = null,
+    /** Accelerations per minute. */
+    val accelPerMin: Double? = null,
+    /** Decelerations per minute. */
+    val decelPerMin: Double? = null,
+    /** Standard deviation of FHR, bpm (firmware sends SD, not variance). */
+    val hrSdBpm: Double? = null,
 ) {
     val hasValidFhr: Boolean get() = fhrBpm != null
 

@@ -26,12 +26,23 @@ object ReadingWire {
         put("motherActive", r.motherActive)
         r.motionState?.let { put("motionState", it.wire()) }
         r.batteryPercent?.let { put("batteryPct", it) }
+        // Extended CTG analytics (payload v3) — omitted when absent so the doctor sees "--"
+        // for an older device rather than a misleading 0.
+        r.meanHrBpm?.let { put("meanHr", it) }
+        r.mstvBpm?.let { put("mstv", it) }
+        r.mltvBpm?.let { put("mltv", it) }
+        r.accelPerMin?.let { put("accel", it) }
+        r.decelPerMin?.let { put("decel", it) }
+        r.hrSdBpm?.let { put("hrSd", it) }
     }
 
     fun fromSnapshot(s: DataSnapshot): ClinicalReading? {
         if (!s.exists()) return null
         fun int(key: String): Int? = s.child(key).getValue(Long::class.java)?.toInt()
         fun bool(key: String): Boolean = s.child(key).getValue(Boolean::class.java) ?: false
+        // A whole number can come back as Long even when we wrote a Double, so try both.
+        fun dbl(key: String): Double? = s.child(key).getValue(Double::class.java)
+            ?: s.child(key).getValue(Long::class.java)?.toDouble()
         return ClinicalReading(
             payloadVersion = 1,
             status = statusOf(int("nsp") ?: 0),
@@ -45,13 +56,22 @@ object ReadingWire {
             motionState = int("motionState")?.let(::motionOf),
             batteryPercent = int("batteryPct"),
             receivedAtEpochMillis = s.child("recordedAt").getValue(Long::class.java) ?: 0L,
+            meanHrBpm = int("meanHr"),
+            mstvBpm = dbl("mstv"),
+            mltvBpm = dbl("mltv"),
+            accelPerMin = dbl("accel"),
+            decelPerMin = dbl("decel"),
+            hrSdBpm = dbl("hrSd"),
         )
     }
 
     private fun WellnessStatus.wire(): Int = when (this) {
-        WellnessStatus.NORMAL, WellnessStatus.UNKNOWN -> 0
+        WellnessStatus.NORMAL -> 0
         WellnessStatus.SUSPECT -> 1
         WellnessStatus.PATHOLOGIC -> 2
+        // 3 = "analysis failed". Must NOT collapse to 0/Normal — the device saying "I don't
+        // know" has to survive the round-trip to the doctor, not read as healthy.
+        WellnessStatus.UNKNOWN -> 3
     }
 
     private fun MotionState.wire(): Int = when (this) {
@@ -63,6 +83,7 @@ object ReadingWire {
     private fun statusOf(v: Int) = when (v) {
         1 -> WellnessStatus.SUSPECT
         2 -> WellnessStatus.PATHOLOGIC
+        3 -> WellnessStatus.UNKNOWN
         else -> WellnessStatus.NORMAL
     }
 
