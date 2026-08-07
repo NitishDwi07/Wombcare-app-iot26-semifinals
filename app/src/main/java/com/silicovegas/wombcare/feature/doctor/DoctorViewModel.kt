@@ -71,10 +71,32 @@ class DoctorViewModel @Inject constructor(
 
     fun resetAdd() { _addResult.value = AddPatientResult.Idle }
 
-    private fun friendly(t: Throwable): String = when ((t as? LinkRequestException)?.error) {
+    private fun friendly(t: Throwable): String = when (val e = (t as? LinkRequestException)?.error) {
         LinkRequestError.Malformed -> "That code doesn't look right. Check and try again."
-        LinkRequestError.NotFound -> "No patient found for that code."
+        LinkRequestError.NotFound ->
+            "No patient found for that code. Ask her to open Share, turn Sharing on, and read " +
+                "you the current code."
         LinkRequestError.AlreadyLinked -> "You've already requested or have access to this patient."
-        else -> "Couldn't send the request. Check your connection and try again."
+        is LinkRequestError.Unknown -> messageFor(e.cause)
+        null -> messageFor(t)
+    }
+
+    /**
+     * Turn a raw failure into something specific enough to act on — a permission denial and a
+     * dropped connection need different fixes, and collapsing both into "check your connection"
+     * is what made this impossible to diagnose. The raw message is included as a last resort.
+     */
+    private fun messageFor(t: Throwable): String {
+        val msg = ((t.message ?: "") + " " + (t.cause?.message ?: "")).lowercase()
+        return when {
+            "permission" in msg || "permission_denied" in msg ->
+                "Access denied by the server. Make sure this account is a doctor account and " +
+                    "the patient generated a fresh code with Sharing switched on."
+            "network" in msg || "offline" in msg || "unavailable" in msg || "timeout" in msg ->
+                "Couldn't reach the server. Check your connection and try again."
+            "app check" in msg || "appcheck" in msg || "attestation" in msg ->
+                "Blocked by App Check. This build isn't registered for verification yet."
+            else -> "Couldn't send the request: ${t.message ?: "unknown error"}"
+        }
     }
 }
