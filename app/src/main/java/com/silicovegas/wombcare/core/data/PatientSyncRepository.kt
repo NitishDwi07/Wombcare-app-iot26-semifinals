@@ -70,6 +70,7 @@ class PatientSyncRepository @Inject constructor(
     private fun nspWire(s: WellnessStatus) = when (s) {
         WellnessStatus.SUSPECT -> 1
         WellnessStatus.PATHOLOGIC -> 2
+        WellnessStatus.UNKNOWN -> 3 // "analysis failed" — never report as Normal
         else -> 0
     }
 }

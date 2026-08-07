@@ -230,3 +230,41 @@ device to *refresh the last value every second* between the 1-minute computation
 screen always looks live), add a 1 s sleeptimer in `Wombcare_6PreFinal` that re-sends
 `s_last_payload`. The app already renders whatever cadence the device sends — no app change
 needed.
+
+---
+
+## Payload v3 — 15 bytes (Wombcare_8PreFinal, CURRENT)
+
+The firmware now sends a **15-byte, version-3** Clinical Update. This is **not** an append to
+v1 — the `flags` byte moved to **byte 1** and now carries the **NSP class in bits 3–4**, so the
+app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are unchanged
+(service `cd3c5a03-…`, clinical `d1dd1e97-…`); `btconf` now declares `length="15"`.
+
+| Byte | Field | App decode |
+|---|---|---|
+| 0 | `version` == 3 | selects the v3 layout |
+| 1 | `flags` | NSP = bits 3–4 (0 N, 1 S, 2 P, **3 = analysis failed → UNKNOWN**); bit7 persistent alert; bit6 sustained bradycardia; bit5 motion detected; bit2 sensor fault (→ `signalLow`); bit1 monitoring; bit0 initializing |
+| 2 | `confidence` | 0–100 |
+| 3 | `fhr_bpm` (LB) | 0 ⇒ null ("no lock") |
+| 4 | `kick_count` | fetal movements this window |
+| 5 | `mstv_x10` | ÷10 ⇒ MSTV in bpm |
+| 6 | `mltv_x4` | ÷4 ⇒ MLTV in bpm |
+| 7 | `accel_x10` | ÷10 ⇒ accelerations/min |
+| 8 | `decel_x10` | ÷10 ⇒ decelerations/min |
+| 9 | `mean_hr_bpm` | mean FHR (0 ⇒ null) |
+| 10 | `hr_sd_x10` | ÷10 ⇒ FHR std-dev in bpm (SD, not variance) |
+| 11–12 | `timestamp` | u16 LE window counter → `deviceMinute` |
+| 13 | `motion_state` | 0 resting / 1 sitting / 2 walking → `MotionState` (explicit now, not derived) |
+| 14 | `reserved` | 0 |
+
+**Rules the app enforces:**
+- **NSP = 3 (analysis failed) is never shown as Normal.** It decodes to `UNKNOWN` and
+  round-trips through Firebase as `3` (see `ReadingWire`/`PatientSyncRepository`).
+- When **bit2 (sensor fault)** is set, bytes 5–10 are meaningless zeros, so all CTG values
+  decode to **null** ("--"), and `signalLow` dims confidence.
+- **Battery is not in the payload** — it stays on the standard Battery Service (0x180F /
+  0x2A19), merged into each reading by `BleDeviceSource`.
+- CTG analytics (MSTV, MLTV, accelerations, decelerations, mean HR, HR-SD) are surfaced on the
+  **doctor's analytical dashboard**; the mother's summary keeps NSP/FHR/kicks/confidence/battery.
+
+Older devices sending v1 (8 bytes) still work unchanged via the legacy decode path.

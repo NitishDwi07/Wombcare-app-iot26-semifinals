@@ -143,6 +143,7 @@ private fun PatientRow(p: PatientListEntry, now: Long, onClick: () -> Unit) {
 private fun statusOf(nsp: Int) = when (nsp) {
     1 -> WellnessStatus.SUSPECT
     2 -> WellnessStatus.PATHOLOGIC
+    3 -> WellnessStatus.UNKNOWN
     else -> WellnessStatus.NORMAL
 }
 

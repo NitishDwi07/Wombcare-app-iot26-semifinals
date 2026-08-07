@@ -18,7 +18,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Speed
@@ -41,8 +44,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.R
 import com.silicovegas.wombcare.core.ble.ConnectionState
 import com.silicovegas.wombcare.core.ble.MotionDisplay
+import com.silicovegas.wombcare.core.device.statsOf
 import com.silicovegas.wombcare.core.ui.components.ConnectionChip
 import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
+import com.silicovegas.wombcare.core.ui.components.FormError
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
 import com.silicovegas.wombcare.core.ui.components.SecondaryButton
 import com.silicovegas.wombcare.core.ui.components.SectionCard
@@ -102,9 +107,12 @@ fun PatientDashboardScreen(
 
     fun bleReady(): Boolean = blePermissions().all { isGranted(it) }
 
-    // Real device → open the scan/picker screen; demo → start the simulator directly.
+    // Real device → reconnect straight to the remembered device if we have one (no re-scan,
+    // and the bond persists so no PIN); otherwise open the scan/picker. Demo → start directly.
     fun proceedToMonitoring() {
-        if (vm.usesRealBle()) onOpenScan() else vm.start()
+        if (!vm.usesRealBle()) { vm.start(); return }
+        val remembered = vm.rememberedDeviceId()
+        if (remembered != null) vm.start(remembered) else onOpenScan()
     }
 
     val permLauncher = rememberLauncherForActivityResult(
@@ -160,18 +168,41 @@ fun PatientDashboardScreen(
             }
 
             val latest = ui.session?.latest?.takeIf { !it.isPlaceholder }
+            val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
+            val stats = statsOf(readings)
+
             StatusHeroCard(
                 status = latest?.status ?: com.silicovegas.wombcare.core.ble.WellnessStatus.NORMAL,
                 waiting = ui.waitingForFirstReading,
                 subtitle = when {
                     ui.waitingForFirstReading -> stringResource(R.string.note_first_window)
-                    ui.session != null -> "${ui.session!!.windowCount} min · worst " +
+                    ui.session != null -> formatDuration(ui.session!!.windowCount) + " · worst " +
                         statusWord(ui.session!!.worstStatus)
                     else -> null
                 },
             )
 
-            // Six tiles.
+            // Real-time inference status — share of the session in each class (real numbers).
+            if (readings.isNotEmpty()) {
+                InferenceStatusCard(stats)
+            }
+
+            // Gentle, actionable guidance when the device is live but the signal is poor —
+            // so a blank FHR reads as "fix the sensor", not "something is wrong with baby".
+            if (ui.connection.isLive && !ui.waitingForFirstReading && latest != null) {
+                when {
+                    latest.fhrBpm == null -> SensorHint(
+                        "No fetal heartbeat detected. Reposition the sensor on your belly and " +
+                            "hold still for a few seconds.",
+                    )
+                    latest.signalLow -> SensorHint(
+                        "Weak signal. Adjust the sensor so it sits snugly, and stay still for " +
+                            "a clearer reading.",
+                    )
+                }
+            }
+
+            // Summary KPIs — the mother's "daily overview" tiles.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = stringResource(R.string.label_fhr),
@@ -190,7 +221,7 @@ fun PatientDashboardScreen(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
-                    label = stringResource(R.string.label_confidence),
+                    label = "AI confidence",
                     value = latest?.confidencePercent?.toString(),
                     unit = stringResource(R.string.unit_percent),
                     icon = Icons.Rounded.Speed,
@@ -201,17 +232,31 @@ fun PatientDashboardScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
+                    label = "Device battery",
+                    value = latest?.batteryPercent?.toString(),
+                    unit = stringResource(R.string.unit_percent),
+                    icon = Icons.Rounded.BatteryFull,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StatTile(
                     label = stringResource(R.string.label_motion),
                     value = latest?.let { motionWord(it.motionDisplay) },
                     icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
                     valueStyle = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
                 )
+                StatTile(
+                    label = "Session length",
+                    value = if (readings.isEmpty()) null else formatDuration(stats.durationMinutes),
+                    icon = Icons.Rounded.Schedule,
+                    valueStyle = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f),
+                )
             }
-            BatteryCard(percent = latest?.batteryPercent)
 
             // Numbers first, then charts — only once there's something real to show.
-            val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
             if (readings.isNotEmpty()) {
                 SessionSummaryCard(readings)
                 SectionCard(title = "Heart rate") {
@@ -222,15 +267,68 @@ fun PatientDashboardScreen(
                 KickSummaryCard(readings)
             }
 
+            // If the link dropped unexpectedly, show WHY (with the GATT code) so a real
+            // dropout is never mistaken for "never connected".
+            (ui.connection as? ConnectionState.Failed)?.let { FormError(it.reason) }
+
             Spacer(Modifier.height(Spacing.sm))
-            if (ui.connection == ConnectionState.Idle) {
-                PrimaryButton("Start monitoring", onClick = ::startMonitoring)
-            } else {
+            val c = ui.connection
+            val busy = c == ConnectionState.Scanning || c == ConnectionState.Connecting ||
+                c == ConnectionState.Pairing || c.isLive || c == ConnectionState.SignalLost
+            if (busy) {
                 SecondaryButton("Stop", onClick = vm::stop)
+            } else {
+                PrimaryButton("Start monitoring", onClick = ::startMonitoring)
             }
 
             DisclaimerFootnote()
             Spacer(Modifier.height(Spacing.lg))
+        }
+    }
+}
+
+/**
+ * Human duration from a whole number of minutes, rolling minutes up into hours (and hours
+ * into days) as they fill — so 60 min reads "1 hr", 90 min "1 hr 30 min", 1440 min "1 day".
+ */
+private fun formatDuration(minutes: Int): String {
+    if (minutes < 60) return "$minutes min"
+    val days = minutes / 1440
+    val hours = (minutes % 1440) / 60
+    val mins = minutes % 60
+    val parts = buildList {
+        if (days > 0) add("$days day" + if (days > 1) "s" else "")
+        if (hours > 0) add("$hours hr")
+        if (mins > 0) add("$mins min")
+    }
+    // Keep it to the two largest units so a tile never overflows (e.g. "1 day 3 hr").
+    return parts.take(2).joinToString(" ")
+}
+
+/** A soft, non-alarming guidance note (amber) for "fix the sensor" situations. */
+@Composable
+private fun SensorHint(message: String) {
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(
+            com.silicovegas.wombcare.core.ui.theme.Radii.tile,
+        ),
+        color = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspectContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Icon(
+                Icons.Rounded.Sensors,
+                contentDescription = null,
+                tint = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspect,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

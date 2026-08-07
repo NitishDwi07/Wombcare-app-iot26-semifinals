@@ -1,5 +1,6 @@
 package com.silicovegas.wombcare.feature.patient
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.core.ui.components.DangerButton
@@ -43,7 +45,9 @@ fun SettingsScreen(
 ) {
     val demoMode by vm.demoMode.collectAsStateWithLifecycle()
     val deviceForgotten by vm.deviceForgotten.collectAsStateWithLifecycle()
+    val needsManualUnpair by vm.needsManualUnpair.collectAsStateWithLifecycle()
     val deleteState by vm.deleteState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
 
     if (confirmDelete) {
@@ -105,21 +109,38 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(Spacing.lg))
                 Text(
-                    if (deviceForgotten) {
-                        "Device forgotten — reconnect from the dashboard and you'll be asked " +
-                            "for the PIN again."
-                    } else {
-                        "Forget the paired device to connect a different one, or to re-enter " +
-                            "the PIN. You'll pick and pair again next time you start."
+                    when {
+                        needsManualUnpair ->
+                            "Android blocked the automatic unpair. To fully forget WombCare " +
+                                "(so it asks for the PIN again), open Bluetooth settings and " +
+                                "tap Unpair / Forget on WombCare."
+                        deviceForgotten ->
+                            "Device forgotten — reconnect from the dashboard and you'll be " +
+                                "asked for the PIN again."
+                        else ->
+                            "Forget the paired device to connect a different one, or to " +
+                                "re-enter the PIN. You'll pick and pair again next time you start."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                DangerButton(
-                    if (deviceForgotten) "Device forgotten" else "Forget device",
-                    onClick = vm::forgetDevice,
-                    enabled = !deviceForgotten,
-                )
+                if (needsManualUnpair) {
+                    DangerButton(
+                        "Open Bluetooth settings",
+                        onClick = {
+                            context.startActivity(
+                                Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
+                    )
+                } else {
+                    DangerButton(
+                        if (deviceForgotten) "Device forgotten" else "Forget device",
+                        onClick = vm::forgetDevice,
+                        enabled = !deviceForgotten,
+                    )
+                }
             }
 
             SectionCard(title = "Account") {

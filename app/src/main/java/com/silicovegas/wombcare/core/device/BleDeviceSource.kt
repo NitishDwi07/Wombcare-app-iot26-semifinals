@@ -66,6 +66,10 @@ class BleDeviceSource(
     private var scanning = false
     private var controlChar: BluetoothGattCharacteristic? = null
 
+    /** True only for a disconnect WE initiated (Stop/Forget), so an unexpected drop by the
+     *  radio/firmware is reported as a fault instead of a clean idle. */
+    @Volatile private var userInitiatedDisconnect = false
+
     /** CCCD subscriptions still to enable (Android runs GATT ops one at a time). */
     private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
 
@@ -79,6 +83,7 @@ class BleDeviceSource(
             _connectionState.value = ConnectionState.BluetoothOff
             return
         }
+        userInitiatedDisconnect = false // any drop before the next Stop is unexpected
         // A known device can be connected directly; otherwise scan for the service.
         if (deviceId != null) {
             runCatching { ad.getRemoteDevice(deviceId) }.getOrNull()?.let { openGatt(it); return }
@@ -158,9 +163,18 @@ class BleDeviceSource(
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    _connectionState.value = ConnectionState.Idle
                     g.close()
                     gatt = null
+                    // A clean disconnect the user asked for → Idle (ready to start again).
+                    // An UNEXPECTED drop → Failed, carrying the GATT status so we can tell
+                    // whose fault it is: a link dropping ~60 s in with no data is almost
+                    // always the device (supervision timeout while the DSP/ML runs, or the
+                    // firmware closing the link), not the app — the app has no give-up timer.
+                    _connectionState.value = if (userInitiatedDisconnect) {
+                        ConnectionState.Idle
+                    } else {
+                        ConnectionState.Failed(disconnectReason(status))
+                    }
                 }
             }
         }
@@ -186,9 +200,19 @@ class BleDeviceSource(
 
         @SuppressLint("MissingPermission")
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            // One CCCD write finished → move to the next queued subscription. When the queue
-            // drains, notifications are all on, so this is the safe moment to ask the device
-            // to START monitoring (replacing BTN0). No-op if there's no control characteristic.
+            // CRITICAL: the Clinical Update + Battery CCCDs sit behind an encrypted, bonded
+            // link (firmware SM: passkey 123456). If we write the CCCD before the mother has
+            // finished the PIN, the device rejects it with GATT_INSUFFICIENT_AUTHENTICATION
+            // (0x05) / _ENCRYPTION (0x0f). We must NOT advance the queue on failure: the
+            // Android stack completes bonding and then AUTO-RETRIES this exact write, calling
+            // back here again with GATT_SUCCESS. Advancing (or clearing) here is what left
+            // the board asleep and the dashboard blank — the subscription silently never took.
+            if (status != BluetoothGatt.GATT_SUCCESS) return
+
+            // One CCCD write succeeded → move to the next queued subscription. When the queue
+            // drains, notifications are all on. Firmware v7 starts the sensors the moment it
+            // sees the subscription (wombcare_ble_is_connected), so the control write is a
+            // best-effort no-op there — harmless when the characteristic is absent.
             if (cccdQueue.isEmpty()) {
                 writeControl(g, WombCareGatt.CMD_START_MONITORING)
             } else {
@@ -314,29 +338,67 @@ class BleDeviceSource(
 
     /**
      * "Forget device": disconnect, then remove the bond so the next connect re-prompts for
-     * the PIN. Android has no public unpair API, so the bond is removed via the standard
-     * `removeBond()` reflection call — done both on the currently-connected device and on any
-     * already-bonded "WombCare" device (so it works even when not currently connected).
+     * the PIN. Android has no public unpair API — the only lever is the hidden `removeBond()`
+     * reflection call, which Android 13+ silently blocks. We attempt it on the connected
+     * device and on any already-bonded "WombCare" unit, and return whether it actually took.
+     * When it didn't, the caller must send the user to system Bluetooth settings to unpair by
+     * hand — otherwise the phone keeps the bond and reconnects with no PIN prompt.
      */
     @SuppressLint("MissingPermission")
-    override fun forget() {
+    override fun forget(): Boolean {
         val connected = gatt?.device
         disconnect()
-        connected?.let { removeBond(it) }
-        // Also clear any lingering bond for a WombCare unit we're not connected to right now.
-        runCatching {
-            adapter?.bondedDevices
-                ?.filter { it.name?.contains("womb", ignoreCase = true) == true }
-                ?.forEach { removeBond(it) }
-        }
+
+        val targets = buildList {
+            connected?.let { add(it) }
+            runCatching {
+                adapter?.bondedDevices
+                    ?.filter { it.name?.contains("womb", ignoreCase = true) == true }
+                    ?.let { addAll(it) }
+            }
+        }.distinctBy { it.address }
+            .filter { it.bondState != BluetoothDevice.BOND_NONE }
+
+        // Nothing bonded → the next connect will pair fresh anyway.
+        if (targets.isEmpty()) return true
+
+        // "Removed" only if EVERY bonded WombCare unit was cleared; one failure means the OS
+        // blocked us and the user still has to unpair manually.
+        return targets.all { removeBond(it) }
     }
 
-    private fun removeBond(device: BluetoothDevice) {
-        runCatching { device.javaClass.getMethod("removeBond").invoke(device) }
+    /** Returns true only if the hidden reflection call reports success (false on 13+ blocks). */
+    private fun removeBond(device: BluetoothDevice): Boolean =
+        runCatching { device.javaClass.getMethod("removeBond").invoke(device) as? Boolean }
+            .getOrNull() ?: false
+
+    /**
+     * Human-readable cause for an unexpected disconnect, keyed by the GATT status. The raw
+     * code is kept in the text on purpose — it's the single most useful fact for deciding
+     * whether a dropout is the app, the radio, or the firmware.
+     *
+     *  8  (0x08) supervision timeout — the device stopped responding (out of range, asleep,
+     *            or the firmware stalled the BLE stack, e.g. during the 60 s DSP/ML step).
+     *  19 (0x13) the device deliberately closed the connection.
+     *  22 (0x16) the connection was terminated by the local host.
+     *  62 (0x3E) failed to establish (never fully connected).
+     *  133(0x85) generic GATT error — usually a flaky link; retry.
+     */
+    private fun disconnectReason(status: Int): String = when (status) {
+        0 -> "Device ended the connection"
+        8 -> "Signal lost (0x08) — device out of range, or it stopped responding while " +
+            "processing. If it drops ~1 min in, the firmware is likely stalling the BLE " +
+            "stack during the 60 s window."
+        19 -> "Device closed the connection (0x13)"
+        22 -> "Connection ended (0x16)"
+        62 -> "Couldn't establish the connection (0x3E) — move closer and retry"
+        133 -> "Connection error (0x85) — retry"
+        else -> "Disconnected (status $status)"
     }
 
     @SuppressLint("MissingPermission")
     override fun disconnect() {
+        userInitiatedDisconnect = true // we're closing it on purpose; don't report a fault
         val ad = adapter
         if (scanning && ad != null) {
             scanning = false

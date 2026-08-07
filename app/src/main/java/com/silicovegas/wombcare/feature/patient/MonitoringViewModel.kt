@@ -73,8 +73,18 @@ class MonitoringViewModel @Inject constructor(
     private var readingJob: Job? = null
     private var stateJob: Job? = null
 
+    /**
+     * The last device the mother connected to, remembered across Stop so Start can reconnect
+     * straight to it — no scan screen, and (because the bond persists) no PIN prompt. Cleared
+     * only by [forgetDevice].
+     */
+    private var lastDeviceId: String? = null
+
     /** Whether starting now will open a real Bluetooth connection (needs BLE permissions). */
     fun usesRealBle(): Boolean = sourceProvider.isRealDevice()
+
+    /** The remembered device to reconnect to, or null if we've never connected / after forget. */
+    fun rememberedDeviceId(): String? = lastDeviceId
 
     /**
      * Start a session. [deviceId] is the Bluetooth address the user picked in the scan
@@ -84,6 +94,7 @@ class MonitoringViewModel @Inject constructor(
      */
     fun start(deviceId: String? = null) {
         if (readingJob?.isActive == true) return
+        if (deviceId != null) lastDeviceId = deviceId // remember for a no-rescan resume
         val src = sourceProvider.current()
         source = src
         _ui.update { it.copy(sourceLabel = src.sourceLabel) }
@@ -130,7 +141,8 @@ class MonitoringViewModel @Inject constructor(
      */
     fun forgetDevice() {
         val src = source ?: sourceProvider.current()
-        src.forget()
+        src.forget() // Settings surfaces the manual-unpair fallback; here we just tear down.
+        lastDeviceId = null // forgotten → next Start must scan and re-pair
         readingJob?.cancel(); readingJob = null
         stateJob?.cancel(); stateJob = null
         engine.endSession()

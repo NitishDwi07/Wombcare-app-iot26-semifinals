@@ -7,6 +7,7 @@ import com.silicovegas.wombcare.core.data.model.AlertRecord
 import com.silicovegas.wombcare.core.data.model.CareLinkStatus
 import com.silicovegas.wombcare.core.data.model.LiveStatus
 import com.silicovegas.wombcare.core.data.model.PatientListEntry
+import com.silicovegas.wombcare.core.data.model.SessionSummary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -110,6 +111,27 @@ class DoctorRepository @Inject constructor(
             ),
         ).await()
     }
+
+    /**
+     * Every session summary for a patient, newest first — the input to the doctor's history
+     * and trends. One lightweight node per session (no per-minute readings), so this stays
+     * cheap even over weeks. Rules already grant a linked doctor the whole `patients/$uid`
+     * subtree, so no extra permission is needed.
+     */
+    fun recentSessions(patientUid: String): Flow<List<SessionSummary>> =
+        db.getReference(DbPaths.sessions(patientUid)).valueFlow().map { snap ->
+            snap.children.mapNotNull { s ->
+                val startedAt = s.child("startedAt").getValue(Long::class.java) ?: return@mapNotNull null
+                SessionSummary(
+                    sessionId = s.key ?: return@mapNotNull null,
+                    startedAt = startedAt,
+                    readingCount = s.child("readingCount").getValue(Long::class.java)?.toInt() ?: 0,
+                    avgFhr = s.child("avgFhr").getValue(Long::class.java)?.toInt(),
+                    totalKicks = s.child("totalKicks").getValue(Long::class.java)?.toInt() ?: 0,
+                    worstNsp = s.child("worstNsp").getValue(Long::class.java)?.toInt() ?: 0,
+                )
+            }.sortedByDescending { it.startedAt }
+        }
 
     /** Readings for one session, ordered by device minute — feeds the same charts as P3. */
     fun sessionReadings(patientUid: String, sessionId: String): Flow<List<ClinicalReading>> =

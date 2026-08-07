@@ -35,10 +35,19 @@ class SettingsViewModel @Inject constructor(
     private val _deviceForgotten = MutableStateFlow(false)
     val deviceForgotten: StateFlow<Boolean> = _deviceForgotten.asStateFlow()
 
-    /** Remove the Bluetooth bond so the next connect re-prompts for the PIN. */
+    /** True when the OS blocked removeBond (Android 13+) and the user must unpair by hand. */
+    private val _needsManualUnpair = MutableStateFlow(false)
+    val needsManualUnpair: StateFlow<Boolean> = _needsManualUnpair.asStateFlow()
+
+    /**
+     * Remove the Bluetooth bond so the next connect re-prompts for the PIN. On Android 13+
+     * the OS may block the programmatic removal — then we flag [needsManualUnpair] so the UI
+     * can send the user to system Bluetooth settings to unpair "WombCare" themselves.
+     */
     fun forgetDevice() {
-        deviceSourceProvider.current().forget()
+        val removed = deviceSourceProvider.current().forget()
         _deviceForgotten.value = true
+        _needsManualUnpair.value = !removed
     }
 
     private val _deleteState = MutableStateFlow<DeleteState>(DeleteState.Idle)
