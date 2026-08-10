@@ -4,8 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.silicovegas.wombcare.core.ble.ClinicalReading
+import com.silicovegas.wombcare.core.data.AuthRepository
 import com.silicovegas.wombcare.core.data.DoctorRepository
 import com.silicovegas.wombcare.core.data.model.LiveStatus
+import com.silicovegas.wombcare.core.data.model.PatientThresholds
 import com.silicovegas.wombcare.core.data.model.SessionSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class DoctorDetailUiState(
@@ -24,6 +27,7 @@ data class DoctorDetailUiState(
     val live: LiveStatus? = null,
     val readings: List<ClinicalReading> = emptyList(),
     val sessions: List<SessionSummary> = emptyList(),
+    val thresholds: PatientThresholds = PatientThresholds.DEFAULT,
 )
 
 /**
@@ -36,16 +40,32 @@ data class DoctorDetailUiState(
 @HiltViewModel
 class DoctorDetailViewModel @Inject constructor(
     private val doctorRepo: DoctorRepository,
+    private val auth: AuthRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val patientUid: String = savedStateHandle["patientUid"] ?: ""
+    private val doctorUid: String? = auth.currentUid
 
     private val _ui = MutableStateFlow(DoctorDetailUiState(patientUid = patientUid))
     val ui: StateFlow<DoctorDetailUiState> = _ui.asStateFlow()
 
+    /** Persist the doctor's thresholds for this patient. Optimistic: the live flow confirms. */
+    fun saveThresholds(t: PatientThresholds) {
+        val doc = doctorUid ?: return
+        _ui.value = _ui.value.copy(thresholds = t)
+        viewModelScope.launch { runCatching { doctorRepo.setThresholds(doc, patientUid, t) } }
+    }
+
     init {
         val liveFlow = doctorRepo.patientLive(patientUid)
+
+        if (doctorUid != null) {
+            doctorRepo.thresholds(doctorUid, patientUid)
+                .catch { }
+                .onEach { t -> _ui.value = _ui.value.copy(thresholds = t) }
+                .launchIn(viewModelScope)
+        }
 
         liveFlow
             .catch { }

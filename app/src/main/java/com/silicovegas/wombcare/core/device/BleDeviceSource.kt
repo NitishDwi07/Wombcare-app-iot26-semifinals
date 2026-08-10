@@ -14,7 +14,10 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.ParcelUuid
 import androidx.annotation.RequiresPermission
 import com.silicovegas.wombcare.core.ble.ClinicalReading
@@ -70,6 +73,9 @@ class BleDeviceSource(
      *  radio/firmware is reported as a fault instead of a clean idle. */
     @Volatile private var userInitiatedDisconnect = false
 
+    /** Watches bonding so a wrong PIN can be recovered from without restarting the app. */
+    private var bondReceiver: BroadcastReceiver? = null
+
     /** CCCD subscriptions still to enable (Android runs GATT ops one at a time). */
     private val cccdQueue = ArrayDeque<BluetoothGattCharacteristic>()
 
@@ -84,6 +90,10 @@ class BleDeviceSource(
             return
         }
         userInitiatedDisconnect = false // any drop before the next Stop is unexpected
+        // Start from a clean slate: a previous attempt (e.g. a wrong PIN) can leave a GATT
+        // client open and a half-finished bond, and THAT is what used to force an app restart
+        // before the device would reappear. Closing here makes a retry reconnect cleanly.
+        closeGatt()
         // A known device can be connected directly; otherwise scan for the service.
         if (deviceId != null) {
             runCatching { ad.getRemoteDevice(deviceId) }.getOrNull()?.let { openGatt(it); return }
@@ -137,11 +147,60 @@ class BleDeviceSource(
     @SuppressLint("MissingPermission")
     private fun openGatt(device: BluetoothDevice) {
         _connectionState.value = ConnectionState.Connecting
+        registerBondReceiver(device)
         try {
             gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } catch (e: SecurityException) {
             _connectionState.value = ConnectionState.PermissionRequired
         }
+    }
+
+    /**
+     * Recovery for a failed passkey. Android resets a device's bond state to `BOND_NONE`
+     * when a passkey is wrong or the pairing dialog is dismissed. We watch for exactly that
+     * transition, tear the connection down cleanly, and surface a Failed state whose retry
+     * re-runs pairing — so a wrong PIN is fixed by tapping Start again, never by killing the app.
+     */
+    @SuppressLint("MissingPermission")
+    private fun registerBondReceiver(target: BluetoothDevice) {
+        unregisterBondReceiver()
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                if (intent.action != BluetoothDevice.ACTION_BOND_STATE_CHANGED) return
+                @Suppress("DEPRECATION")
+                val dev = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                if (dev?.address != target.address) return
+                val state = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                val prev = intent.getIntExtra(
+                    BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR,
+                )
+                if (state == BluetoothDevice.BOND_NONE && prev == BluetoothDevice.BOND_BONDING) {
+                    _connectionState.value = ConnectionState.Failed(
+                        "Pairing didn't complete — wrong PIN? Tap Start to enter it again.",
+                    )
+                    closeGatt()
+                }
+            }
+        }
+        runCatching {
+            context.registerReceiver(r, IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED))
+            bondReceiver = r
+        }
+    }
+
+    private fun unregisterBondReceiver() {
+        bondReceiver?.let { runCatching { context.unregisterReceiver(it) } }
+        bondReceiver = null
+    }
+
+    /** Fully release the GATT client so the next connect starts clean (no leaked client). */
+    @SuppressLint("MissingPermission")
+    private fun closeGatt() {
+        runCatching { gatt?.disconnect() }
+        runCatching { gatt?.close() }
+        gatt = null
+        controlChar = null
+        cccdQueue.clear()
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -407,10 +466,8 @@ class BleDeviceSource(
         // Best-effort: tell the device to STOP monitoring (mirrors BTN0 off) before we drop
         // the link. Firmware should also sleep sensors on disconnect as a fallback.
         gatt?.let { writeControl(it, WombCareGatt.CMD_STOP_MONITORING) }
-        controlChar = null
-        gatt?.disconnect()
-        gatt?.close()
-        gatt = null
+        unregisterBondReceiver()
+        closeGatt()
         _connectionState.value = ConnectionState.Idle
     }
 }

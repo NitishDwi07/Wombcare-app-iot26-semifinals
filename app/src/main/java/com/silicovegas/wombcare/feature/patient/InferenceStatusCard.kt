@@ -34,13 +34,13 @@ import androidx.compose.material3.Text
 /**
  * The mother's "Real-time inference status" — the share of this session's minutes the device
  * classified Normal / Suspect / Pathologic, as three ring gauges (matching the summary
- * dashboard design). These are REAL numbers: [SessionStats.normalMinutes] etc. over the total,
+ * dashboard design). These are REAL numbers: [SessionStats.normalWindows] etc. over the total,
  * so the rings always sum to 100% and reflect only what the device actually reported.
  */
 @Composable
 fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
     val status = LocalStatusColors.current
-    val total = (stats.normalMinutes + stats.suspectMinutes + stats.pathologicMinutes)
+    val total = (stats.normalWindows + stats.suspectWindows + stats.pathologicWindows)
         .coerceAtLeast(1)
 
     SectionCard(title = "Real-time inference status", modifier = modifier) {
@@ -51,7 +51,7 @@ fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
             InferenceRing(
                 caption = "Normal",
                 index = 1,
-                percent = pct(stats.normalMinutes, total),
+                percent = pct(stats.normalWindows, total),
                 color = status.normal,
                 track = status.normalContainer,
                 modifier = Modifier.weight(1f),
@@ -59,7 +59,7 @@ fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
             InferenceRing(
                 caption = "Suspect",
                 index = 2,
-                percent = pct(stats.suspectMinutes, total),
+                percent = pct(stats.suspectWindows, total),
                 color = status.suspect,
                 track = status.suspectContainer,
                 modifier = Modifier.weight(1f),
@@ -67,7 +67,7 @@ fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
             InferenceRing(
                 caption = "Pathological",
                 index = 3,
-                percent = pct(stats.pathologicMinutes, total),
+                percent = pct(stats.pathologicWindows, total),
                 color = status.pathologic,
                 track = status.pathologicContainer,
                 modifier = Modifier.weight(1f),

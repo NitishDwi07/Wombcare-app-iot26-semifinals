@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Speed
@@ -30,7 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.core.ble.WellnessStatus
@@ -99,6 +104,9 @@ fun DoctorPatientDetailScreen(
             // Recent history / trends first — visible even when she isn't monitoring right now.
             RecentTrendsCard(ui.sessions, now)
 
+            // Per-patient alert thresholds the doctor can tune (always available).
+            ThresholdsCard(ui.thresholds, onSave = vm::saveThresholds)
+
             if (readings.isEmpty()) {
                 EmptyState(
                     title = "Not monitoring right now",
@@ -125,12 +133,14 @@ fun DoctorPatientDetailScreen(
             }
 
             // The values the device actually transmits: FHR, kicks (FM), AI confidence.
+            val th = ui.thresholds
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = "Fetal heart rate",
                     value = latestReading?.fhrBpm?.toString(),
                     unit = "BPM",
                     icon = Icons.Rounded.MonitorHeart,
+                    note = fhrNote(latestReading?.fhrBpm, th),
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
@@ -166,6 +176,8 @@ fun DoctorPatientDetailScreen(
                     value = fmt1(latestReading?.mstvBpm),
                     unit = "bpm",
                     icon = Icons.Rounded.ShowChart,
+                    note = variabilityNote(latestReading?.mstvBpm, th),
+                    dimmed = latestReading?.mstvBpm?.let { it < th.minVariabilityBpm } == true,
                     valueStyle = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
                 )
@@ -325,6 +337,107 @@ private fun RecentTrendsCard(
 
 private val trendDateFormat = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
 private fun trendDate(epochMillis: Long): String = trendDateFormat.format(java.util.Date(epochMillis))
+
+/** FHR out-of-range note relative to the doctor's thresholds, or null when in range. */
+private fun fhrNote(fhr: Int?, t: com.silicovegas.wombcare.core.data.model.PatientThresholds): String? =
+    when {
+        fhr == null -> null
+        fhr < t.fhrLowBpm -> "Below set low (${t.fhrLowBpm})"
+        fhr > t.fhrHighBpm -> "Above set high (${t.fhrHighBpm})"
+        else -> null
+    }
+
+/** Reduced-variability note when MSTV is under the doctor's threshold. */
+private fun variabilityNote(mstv: Double?, t: com.silicovegas.wombcare.core.data.model.PatientThresholds): String? =
+    if (mstv != null && mstv < t.minVariabilityBpm) "Reduced (< ${t.minVariabilityBpm})" else null
+
+/**
+ * The doctor's per-patient threshold editor. Steppers (not free text) so a value can't be
+ * left half-typed or invalid, seeded from the saved thresholds and re-seeded whenever they
+ * change. "Save" persists; "Reset" returns to the literature defaults.
+ */
+@Composable
+private fun ThresholdsCard(
+    thresholds: com.silicovegas.wombcare.core.data.model.PatientThresholds,
+    onSave: (com.silicovegas.wombcare.core.data.model.PatientThresholds) -> Unit,
+) {
+    var draft by androidx.compose.runtime.remember(thresholds) {
+        androidx.compose.runtime.mutableStateOf(thresholds)
+    }
+    val dirty = draft != thresholds
+
+    SectionCard(title = "Alert thresholds") {
+        Text(
+            "Set per this patient. Defaults follow FIGO/NICHD antenatal CTG ranges " +
+                "(baseline 110–160 bpm, variability ≥5 bpm). Decision support, not a diagnosis.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Spacing.md))
+
+        StepperRow("Bradycardia below", draft.fhrLowBpm, "bpm", step = 5, range = 80..150) {
+            draft = draft.copy(fhrLowBpm = it)
+        }
+        StepperRow("Tachycardia above", draft.fhrHighBpm, "bpm", step = 5, range = 150..200) {
+            draft = draft.copy(fhrHighBpm = it)
+        }
+        StepperRow("Reduced variability below", draft.minVariabilityBpm, "bpm", step = 1, range = 1..15) {
+            draft = draft.copy(minVariabilityBpm = it)
+        }
+        StepperRow("Min. confidence to alert", draft.minConfidencePct, "%", step = 5, range = 0..90) {
+            draft = draft.copy(minConfidencePct = it)
+        }
+
+        Spacer(Modifier.height(Spacing.md))
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            com.silicovegas.wombcare.core.ui.components.SecondaryButton(
+                "Reset to defaults",
+                onClick = { draft = com.silicovegas.wombcare.core.data.model.PatientThresholds.DEFAULT },
+                modifier = Modifier.weight(1f),
+            )
+            com.silicovegas.wombcare.core.ui.components.PrimaryButton(
+                if (dirty) "Save" else "Saved",
+                onClick = { onSave(draft) },
+                enabled = dirty,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StepperRow(
+    label: String,
+    value: Int,
+    unit: String,
+    step: Int,
+    range: IntRange,
+    onChange: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            IconButton(
+                onClick = { onChange((value - step).coerceIn(range)) },
+                enabled = value - step >= range.first,
+            ) { Icon(Icons.Rounded.Remove, contentDescription = "Decrease $label") }
+            Text(
+                "$value $unit",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.widthIn(min = 64.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            IconButton(
+                onClick = { onChange((value + step).coerceIn(range)) },
+                enabled = value + step <= range.last,
+            ) { Icon(Icons.Rounded.Add, contentDescription = "Increase $label") }
+        }
+    }
+}
 
 /** One-decimal string for a CTG figure, or null so the tile shows "--". */
 private fun fmt1(d: Double?): String? = d?.let { String.format(java.util.Locale.US, "%.1f", it) }

@@ -7,6 +7,7 @@ import com.silicovegas.wombcare.core.data.model.AlertRecord
 import com.silicovegas.wombcare.core.data.model.CareLinkStatus
 import com.silicovegas.wombcare.core.data.model.LiveStatus
 import com.silicovegas.wombcare.core.data.model.PatientListEntry
+import com.silicovegas.wombcare.core.data.model.PatientThresholds
 import com.silicovegas.wombcare.core.data.model.SessionSummary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -101,6 +102,36 @@ class DoctorRepository @Inject constructor(
                 )
             }
         }
+
+    /**
+     * The doctor's per-patient alert thresholds. Falls back to [PatientThresholds.DEFAULT]
+     * (the literature-based values) whenever a field — or the whole node — is unset, so the
+     * screen always has a complete, sensible set to show and edit.
+     */
+    fun thresholds(doctorUid: String, patientUid: String): Flow<PatientThresholds> =
+        db.getReference(DbPaths.doctorThresholds(doctorUid, patientUid)).valueFlow().map { snap ->
+            val d = PatientThresholds.DEFAULT
+            fun int(key: String, fallback: Int) =
+                snap.child(key).getValue(Long::class.java)?.toInt() ?: fallback
+            PatientThresholds(
+                fhrLowBpm = int("fhrLow", d.fhrLowBpm),
+                fhrHighBpm = int("fhrHigh", d.fhrHighBpm),
+                minVariabilityBpm = int("minVar", d.minVariabilityBpm),
+                minConfidencePct = int("minConf", d.minConfidencePct),
+            )
+        }
+
+    /** Save the doctor's thresholds for a patient (under the doctor's own node). */
+    suspend fun setThresholds(doctorUid: String, patientUid: String, t: PatientThresholds) {
+        db.getReference(DbPaths.doctorThresholds(doctorUid, patientUid)).setValue(
+            mapOf(
+                "fhrLow" to t.fhrLowBpm,
+                "fhrHigh" to t.fhrHighBpm,
+                "minVar" to t.minVariabilityBpm,
+                "minConf" to t.minConfidencePct,
+            ),
+        ).await()
+    }
 
     /** Doctor acknowledges an alert — the only clinical write a doctor is allowed. */
     suspend fun acknowledgeAlert(patientUid: String, alertId: String, doctorUid: String, nowMillis: Long) {
