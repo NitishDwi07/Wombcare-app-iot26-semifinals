@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -66,7 +67,9 @@ fun DoctorPatientDetailScreen(
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val now = System.currentTimeMillis()
-    val live = ui.live
+    // Hide anything from before the last Reset, so cleared/previous-session values stay gone
+    // until genuinely new data arrives.
+    val live = ui.live?.takeIf { it.lastReadingAt > ui.clearedAtMillis }
     val isLive = live != null && live.lastReadingAt > 0 &&
         (now - live.lastReadingAt) <= WombCareGatt.DROPOUT_MILLIS
 
@@ -79,10 +82,13 @@ fun DoctorPatientDetailScreen(
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    TextButton(onClick = vm::clearSession) { Text("Reset") }
+                },
             )
         },
     ) { pad ->
-        val readings = ui.readings
+        val readings = ui.readings.filter { it.receivedAtEpochMillis > ui.clearedAtMillis }
         Column(
             modifier = Modifier
                 .fillMaxSize()

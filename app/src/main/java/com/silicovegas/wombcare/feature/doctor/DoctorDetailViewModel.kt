@@ -28,6 +28,12 @@ data class DoctorDetailUiState(
     val readings: List<ClinicalReading> = emptyList(),
     val sessions: List<SessionSummary> = emptyList(),
     val thresholds: PatientThresholds = PatientThresholds.DEFAULT,
+    /**
+     * When the doctor last tapped Reset. The live session view hides everything received at
+     * or before this instant, so old/previous-session numbers clear until FRESH data arrives.
+     * It never deletes the patient's stored data — only what this screen currently shows.
+     */
+    val clearedAtMillis: Long = 0L,
 )
 
 /**
@@ -49,6 +55,15 @@ class DoctorDetailViewModel @Inject constructor(
 
     private val _ui = MutableStateFlow(DoctorDetailUiState(patientUid = patientUid))
     val ui: StateFlow<DoctorDetailUiState> = _ui.asStateFlow()
+
+    /**
+     * Clear the current session view. Marks "now" as the cut-off; the screen then shows only
+     * data received after this, so a stale/previous session's numbers disappear until the
+     * patient sends something new. Does NOT touch stored data or the patient's record.
+     */
+    fun clearSession() {
+        _ui.value = _ui.value.copy(clearedAtMillis = System.currentTimeMillis())
+    }
 
     /** Persist the doctor's thresholds for this patient. Optimistic: the live flow confirms. */
     fun saveThresholds(t: PatientThresholds) {
