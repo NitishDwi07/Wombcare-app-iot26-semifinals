@@ -12,6 +12,14 @@ object DbPaths {
     fun profile(uid: String) = "profiles/$uid"
     fun doctor(uid: String) = "doctors/$uid"
 
+    /**
+     * Per-patient alert thresholds a doctor sets. Kept under the DOCTOR's own node (which the
+     * rules already let only that doctor read/write), so no rule change is needed and one
+     * doctor's thresholds never leak to another.
+     */
+    fun doctorThresholds(doctorUid: String, patientUid: String) =
+        "doctors/$doctorUid/thresholds/$patientUid"
+
     fun patient(uid: String) = "patients/$uid"
     fun authorizedDoctors(patientUid: String) = "patients/$patientUid/authorizedDoctors"
     fun authorizedDoctor(patientUid: String, doctorUid: String) =

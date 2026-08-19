@@ -18,12 +18,34 @@ data class SessionStats(
     val maxFhr: Int?,
     val averageConfidence: Int?,
     val totalKicks: Int,
-    val durationMinutes: Int,
-    val normalMinutes: Int,
-    val suspectMinutes: Int,
-    val pathologicMinutes: Int,
+    /**
+     * Number of windows in the session. The Wombcare_8PreFinal firmware pushes ONE window
+     * per SECOND (the DSP trigger fires each second, sliding a 60 s buffer — see app.c), so
+     * this count is effectively **seconds monitored**, not minutes. Named `...Windows` to stop
+     * anyone re-introducing the old "one window = one minute" assumption.
+     */
+    val durationWindows: Int,
+    val normalWindows: Int,
+    val suspectWindows: Int,
+    val pathologicWindows: Int,
 ) {
     val hasFhr: Boolean get() = averageFhr != null
+}
+
+/**
+ * Elapsed time as a rolling clock: seconds until a minute, then "M min S sec", then past
+ * 59 min 59 sec, "H hr M min". Shared by the patient dashboard and the session summary so a
+ * duration reads the same everywhere.
+ */
+fun formatDurationSeconds(totalSeconds: Long): String {
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
+    val s = totalSeconds % 60
+    return when {
+        h > 0 -> "$h hr $m min"
+        m > 0 -> "$m min $s sec"
+        else -> "$s sec"
+    }
 }
 
 fun statsOf(readings: List<ClinicalReading>): SessionStats {
@@ -38,10 +60,10 @@ fun statsOf(readings: List<ClinicalReading>): SessionStats {
         maxFhr = validFhr.maxOrNull(),
         averageConfidence = if (confidences.isEmpty()) null else confidences.average().roundToIntCompat(),
         totalKicks = real.sumOf { it.kickCountInWindow },
-        durationMinutes = real.size, // one window per minute
-        normalMinutes = real.count { it.status == WellnessStatus.NORMAL },
-        suspectMinutes = real.count { it.status == WellnessStatus.SUSPECT },
-        pathologicMinutes = real.count { it.status == WellnessStatus.PATHOLOGIC },
+        durationWindows = real.size, // one window per SECOND on current firmware
+        normalWindows = real.count { it.status == WellnessStatus.NORMAL },
+        suspectWindows = real.count { it.status == WellnessStatus.SUSPECT },
+        pathologicWindows = real.count { it.status == WellnessStatus.PATHOLOGIC },
     )
 }
 

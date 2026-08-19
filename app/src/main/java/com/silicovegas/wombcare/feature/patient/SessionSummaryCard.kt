@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.silicovegas.wombcare.core.ble.ClinicalReading
+import com.silicovegas.wombcare.core.device.formatDurationSeconds
 import com.silicovegas.wombcare.core.device.statsOf
 import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
@@ -21,8 +22,9 @@ import com.silicovegas.wombcare.core.ui.theme.Spacing
 
 /**
  * A clean numeric summary of the session — the numbers the charts only imply. Deliberately
- * text/number-first (no plots): average and range of FHR, total kicks, minutes monitored,
- * and how those minutes split across Normal / Suspect / Pathologic.
+ * text/number-first (no plots): average and range of FHR, total kicks, time monitored, and
+ * how that time splits across Normal / Suspect / Pathologic. Time is in SECONDS — the device
+ * reports one window per second.
  *
  * Every figure uses `stats`, which excludes invalid FHR windows, so nothing here is dragged
  * toward zero by a "--" minute.
@@ -45,7 +47,8 @@ fun SessionSummaryCard(readings: List<ClinicalReading>, modifier: Modifier = Mod
         Spacer(Modifier.height(Spacing.lg))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Metric("Total kicks", "${s.totalKicks}", "this session", Modifier.weight(1f))
-            Metric("Monitored", "${s.durationMinutes}", "min", Modifier.weight(1f))
+            // One window per SECOND on current firmware, so this is seconds, rolled up.
+            Metric("Monitored", formatDurationSeconds(s.durationWindows.toLong()), "", Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(Spacing.lg))
@@ -56,9 +59,9 @@ fun SessionSummaryCard(readings: List<ClinicalReading>, modifier: Modifier = Mod
         )
         Spacer(Modifier.height(Spacing.sm))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            StatusMinutes("Normal", s.normalMinutes, status.normal, Modifier.weight(1f))
-            StatusMinutes("Suspect", s.suspectMinutes, status.suspect, Modifier.weight(1f))
-            StatusMinutes("Pathologic", s.pathologicMinutes, status.pathologic, Modifier.weight(1f))
+            StatusSeconds("Normal", s.normalWindows, status.normal, Modifier.weight(1f))
+            StatusSeconds("Suspect", s.suspectWindows, status.suspect, Modifier.weight(1f))
+            StatusSeconds("Pathologic", s.pathologicWindows, status.pathologic, Modifier.weight(1f))
         }
     }
 }
@@ -90,20 +93,20 @@ private fun Metric(label: String, value: String, unit: String, modifier: Modifie
 }
 
 @Composable
-private fun StatusMinutes(
+private fun StatusSeconds(
     label: String,
-    minutes: Int,
+    seconds: Int,
     color: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, horizontalAlignment = androidx.compose.ui.Alignment.Start) {
         Text(
-            "$minutes",
+            "$seconds",
             style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
             color = color,
         )
         Text(
-            "$label · min",
+            "$label · sec",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

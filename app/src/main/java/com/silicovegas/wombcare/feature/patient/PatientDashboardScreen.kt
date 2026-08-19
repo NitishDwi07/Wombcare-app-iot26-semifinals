@@ -36,6 +36,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -171,12 +174,26 @@ fun PatientDashboardScreen(
             val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
             val stats = statsOf(readings)
 
+            // Live session clock: real elapsed seconds since the session began, ticking every
+            // second, formatted sec → min → hr (not the per-window count).
+            val startedAt = ui.session?.startedAtEpochMillis
+            var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(startedAt) {
+                if (startedAt != null) {
+                    while (true) {
+                        nowMs = System.currentTimeMillis()
+                        kotlinx.coroutines.delay(1000)
+                    }
+                }
+            }
+            val elapsedSec = startedAt?.let { ((nowMs - it) / 1000).coerceAtLeast(0) } ?: 0L
+
             StatusHeroCard(
                 status = latest?.status ?: com.silicovegas.wombcare.core.ble.WellnessStatus.NORMAL,
                 waiting = ui.waitingForFirstReading,
                 subtitle = when {
                     ui.waitingForFirstReading -> stringResource(R.string.note_first_window)
-                    ui.session != null -> formatDuration(ui.session!!.windowCount) + " · worst " +
+                    ui.session != null -> formatElapsed(elapsedSec) + " · worst " +
                         statusWord(ui.session!!.worstStatus)
                     else -> null
                 },
@@ -249,7 +266,7 @@ fun PatientDashboardScreen(
                 )
                 StatTile(
                     label = "Session length",
-                    value = if (readings.isEmpty()) null else formatDuration(stats.durationMinutes),
+                    value = if (ui.session == null) null else formatElapsed(elapsedSec),
                     icon = Icons.Rounded.Schedule,
                     valueStyle = MaterialTheme.typography.headlineMedium,
                     modifier = Modifier.weight(1f),
@@ -288,21 +305,19 @@ fun PatientDashboardScreen(
 }
 
 /**
- * Human duration from a whole number of minutes, rolling minutes up into hours (and hours
- * into days) as they fill — so 60 min reads "1 hr", 90 min "1 hr 30 min", 1440 min "1 day".
+ * Real elapsed time as a clock, rolling up as it fills: seconds until a minute, then
+ * "M min S sec", and once past 59 min 59 sec, "H hr M min". So the session shows live
+ * seconds early on and never displays a fake minute count.
  */
-private fun formatDuration(minutes: Int): String {
-    if (minutes < 60) return "$minutes min"
-    val days = minutes / 1440
-    val hours = (minutes % 1440) / 60
-    val mins = minutes % 60
-    val parts = buildList {
-        if (days > 0) add("$days day" + if (days > 1) "s" else "")
-        if (hours > 0) add("$hours hr")
-        if (mins > 0) add("$mins min")
+private fun formatElapsed(totalSeconds: Long): String {
+    val h = totalSeconds / 3600
+    val m = (totalSeconds % 3600) / 60
+    val s = totalSeconds % 60
+    return when {
+        h > 0 -> "$h hr $m min"
+        m > 0 -> "$m min $s sec"
+        else -> "$s sec"
     }
-    // Keep it to the two largest units so a tile never overflows (e.g. "1 day 3 hr").
-    return parts.take(2).joinToString(" ")
 }
 
 /** A soft, non-alarming guidance note (amber) for "fix the sensor" situations. */

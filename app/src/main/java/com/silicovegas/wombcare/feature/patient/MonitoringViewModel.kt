@@ -16,6 +16,7 @@ import com.silicovegas.wombcare.core.device.SessionSnapshot
 import com.silicovegas.wombcare.core.device.WombCareDeviceSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -73,6 +74,9 @@ class MonitoringViewModel @Inject constructor(
     private var readingJob: Job? = null
     private var stateJob: Job? = null
 
+    /** Cancels a stuck connection attempt so the UI never hangs on "Connecting" forever. */
+    private var connectWatchdog: Job? = null
+
     /**
      * The last device the mother connected to, remembered across Stop so Start can reconnect
      * straight to it — no scan screen, and (because the bond persists) no PIN prompt. Cleared
@@ -93,14 +97,32 @@ class MonitoringViewModel @Inject constructor(
      * connects straight to the chosen device.
      */
     fun start(deviceId: String? = null) {
-        if (readingJob?.isActive == true) return
+        // Only a genuinely LIVE session should block a restart. Any other state — Failed,
+        // Idle, or a stuck "Connecting"/"Pairing" after a device reset or a wrong PIN — means
+        // the previous attempt is over, so we tear it down and start fresh. (Returning early
+        // whenever the reading job was still active is exactly why "Start did nothing" after a
+        // drop: the job kept running against a source that had gone silent.)
+        if (_ui.value.connection.isLive && readingJob?.isActive == true) return
+
         if (deviceId != null) lastDeviceId = deviceId // remember for a no-rescan resume
+
+        // Clean slate: stop collectors and fully close any prior connection/GATT client so a
+        // reconnect doesn't inherit a dead handle.
+        readingJob?.cancel(); readingJob = null
+        stateJob?.cancel(); stateJob = null
+        connectWatchdog?.cancel(); connectWatchdog = null
+        runCatching { source?.disconnect() }
+        engine.endSession()
+
         val src = sourceProvider.current()
         source = src
-        _ui.update { it.copy(sourceLabel = src.sourceLabel) }
+        _ui.value = MonitoringUiState(sourceLabel = src.sourceLabel)
 
         stateJob = viewModelScope.launch {
-            src.connectionState.collect { cs -> _ui.update { it.copy(connection = cs) } }
+            src.connectionState.collect { cs ->
+                _ui.update { it.copy(connection = cs) }
+                if (cs.isLive) { connectWatchdog?.cancel(); connectWatchdog = null }
+            }
         }
         readingJob = viewModelScope.launch {
             src.readings.collect { reading ->
@@ -125,12 +147,32 @@ class MonitoringViewModel @Inject constructor(
             }
         }
         src.connect(deviceId)
+
+        // Watchdog: if we never reach a live link — and aren't sitting on the PIN dialog —
+        // give up so the button frees up and the mother can just tap Start again, instead of
+        // the screen hanging on "Connecting" until the app is killed.
+        connectWatchdog = viewModelScope.launch {
+            delay(CONNECT_TIMEOUT_MS)
+            val cs = _ui.value.connection
+            if (!cs.isLive && cs != ConnectionState.Pairing) {
+                runCatching { src.disconnect() }
+                readingJob?.cancel(); readingJob = null
+                stateJob?.cancel(); stateJob = null
+                _ui.value = MonitoringUiState(
+                    sourceLabel = src.sourceLabel,
+                    connection = ConnectionState.Failed(
+                        "Couldn't connect. Make sure the device is on and nearby, then tap Start.",
+                    ),
+                )
+            }
+        }
     }
 
     fun stop() {
         source?.disconnect()
         readingJob?.cancel(); readingJob = null
         stateJob?.cancel(); stateJob = null
+        connectWatchdog?.cancel(); connectWatchdog = null
         engine.endSession()
         _ui.update { MonitoringUiState() }
     }
@@ -145,11 +187,17 @@ class MonitoringViewModel @Inject constructor(
         lastDeviceId = null // forgotten → next Start must scan and re-pair
         readingJob?.cancel(); readingJob = null
         stateJob?.cancel(); stateJob = null
+        connectWatchdog?.cancel(); connectWatchdog = null
         engine.endSession()
         _ui.update { MonitoringUiState() }
     }
 
     override fun onCleared() {
         source?.disconnect()
+    }
+
+    private companion object {
+        /** How long to wait for a live link before giving up (PIN entry is exempt). */
+        const val CONNECT_TIMEOUT_MS = 25_000L
     }
 }
