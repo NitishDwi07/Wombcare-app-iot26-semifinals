@@ -243,7 +243,7 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
 | Byte | Field | App decode |
 |---|---|---|
 | 0 | `version` == 3 | selects the v3 layout |
-| 1 | `flags` | NSP = bits 3–4 (0 N, 1 S, 2 P, **3 = analysis failed → UNKNOWN**); bit7 persistent alert; bit6 sustained bradycardia; bit5 motion detected; bit2 sensor fault (→ `signalLow`); bit1 monitoring; bit0 initializing |
+| 1 | `flags` | NSP = bits 3–4 (0 N, 1 S, 2 P, **3 = analysis failed → shown as Suspect**); bit7 persistent alert; bit6 sustained bradycardia; bit5 motion detected; bit2 sensor fault (→ `signalLow`); bit1 monitoring; bit0 initializing |
 | 2 | `confidence` | 0–100 |
 | 3 | `fhr_bpm` (LB) | 0 ⇒ null ("no lock") |
 | 4 | `kick_count` | fetal movements this window |
@@ -255,11 +255,11 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
 | 10 | `hr_sd_x10` | ÷10 ⇒ FHR std-dev in bpm (SD, not variance) |
 | 11–12 | `timestamp` | u16 LE window counter → `deviceMinute` |
 | 13 | `motion_state` | 0 resting / 1 sitting / 2 walking → `MotionState` (explicit now, not derived) |
-| 14 | `reserved` | 0 |
+| 14 | `maternal_hr_bpm` | the MOTHER's heart rate in bpm; **0 = not sent** → "--". (Was "reserved"; the firmware isolates the maternal ECG to cancel it, so it already has this value — write it here.) |
 
 **Rules the app enforces:**
-- **NSP = 3 (analysis failed) is never shown as Normal.** It decodes to `UNKNOWN` and
-  round-trips through Firebase as `3` (see `ReadingWire`/`PatientSyncRepository`).
+- **NSP = 3 (analysis failed) is never shown as Normal, and never as "Unknown".** It is
+  surfaced as **Suspect** (a caution the mother/doctor can act on) at every decode point.
 - When **bit2 (sensor fault)** is set, bytes 5–10 are meaningless zeros, so all CTG values
   decode to **null** ("--"), and `signalLow` dims confidence.
 - **Battery is not in the payload** — it stays on the standard Battery Service (0x180F /

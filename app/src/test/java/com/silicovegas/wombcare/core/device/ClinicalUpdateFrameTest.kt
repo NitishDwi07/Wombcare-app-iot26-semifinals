@@ -72,10 +72,11 @@ class ClinicalUpdateFrameTest {
                 nsp = WellnessStatus.SUSPECT, confidence = 77, fhrBpm = 148, kickCount = 6,
                 deviceMinute = 300, motionState = MotionState.SITTING,
                 meanHrBpm = 150, mstvBpm = 6.5, mltvBpm = 12.0,
-                accelPerMin = 3.0, decelPerMin = 1.0, hrSdBpm = 4.5,
+                accelPerMin = 3.0, decelPerMin = 1.0, hrSdBpm = 4.5, maternalHrBpm = 84,
             ),
         )
         assertEquals(3, r.payloadVersion)
+        assertEquals(84, r.maternalHrBpm) // byte 14 carries the mother's heart rate
         assertEquals(WellnessStatus.SUSPECT, r.status) // proves NSP came out of flags bits 3-4
         assertEquals(77, r.confidencePercent)
         assertEquals(148, r.fhrBpm)
@@ -92,14 +93,14 @@ class ClinicalUpdateFrameTest {
     }
 
     @Test
-    fun `v3 analysis-failed maps to UNKNOWN, never Normal`() {
+    fun `v3 analysis-failed is shown as Suspect, never Unknown or Normal`() {
         // Build a raw v3 frame with NSP = 3 in flag bits 3-4.
         val bytes = ByteArray(ClinicalUpdateParser.PAYLOAD_V3_SIZE)
         bytes[0] = 3
         bytes[1] = (3 shl 3).toByte() // NSP = 3 (analysis failed)
         bytes[3] = 140.toByte()
         val r = roundTrip(bytes)
-        assertEquals(WellnessStatus.UNKNOWN, r.status)
+        assertEquals(WellnessStatus.SUSPECT, r.status)
     }
 
     @Test

@@ -93,6 +93,7 @@ object ClinicalUpdateFrame {
         accelPerMin: Double,
         decelPerMin: Double,
         hrSdBpm: Double,
+        maternalHrBpm: Int = 0,
         alert: Boolean = nsp == WellnessStatus.PATHOLOGIC,
         signalLow: Boolean = false,
     ): ByteArray {
@@ -117,7 +118,7 @@ object ClinicalUpdateFrame {
             (deviceMinute and 0xFF).toByte(),               // byte 11-12: timestamp LE
             ((deviceMinute shr 8) and 0xFF).toByte(),
             motionByte(motionState),                        // byte 13
-            0,                                              // byte 14: reserved
+            maternalHrBpm.coerceIn(0, 255).toByte(),        // byte 14: maternal HR (0 = none)
         )
     }
 

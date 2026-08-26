@@ -157,8 +157,9 @@ class ClinicalUpdateParserTest {
 
     @Test
     fun `out-of-range values are contained`() {
+        // An unexpected NSP is surfaced as Suspect (a caution), never Unknown or Normal.
         val r = success(v1(nsp = 7, confidence = 250))
-        assertEquals(WellnessStatus.UNKNOWN, r.status)
+        assertEquals(WellnessStatus.SUSPECT, r.status)
         assertEquals(100, r.confidencePercent)
     }
 }

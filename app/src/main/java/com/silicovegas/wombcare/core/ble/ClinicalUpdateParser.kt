@@ -127,14 +127,17 @@ object ClinicalUpdateParser {
             accelPerMin = ctg(bytes.u8(7), 10.0),
             decelPerMin = ctg(bytes.u8(8), 10.0),
             hrSdBpm = ctg(bytes.u8(10), 10.0),
+            // byte 14 (was "reserved"): maternal heart rate in bpm; 0 = not sent.
+            maternalHrBpm = bytes.u8(14).takeIf { it > 0 },
         )
     }
 
     private fun statusOf(raw: Int): WellnessStatus = when (raw) {
         0 -> WellnessStatus.NORMAL
-        1 -> WellnessStatus.SUSPECT
         2 -> WellnessStatus.PATHOLOGIC
-        else -> WellnessStatus.UNKNOWN
+        // 1 = Suspect, and 3 ("analysis failed") is shown as Suspect too: never "Unknown"
+        // (confusing) and never "Normal" (unsafe) — a caution the mother/doctor can act on.
+        else -> WellnessStatus.SUSPECT
     }
 
     private fun motionOf(raw: Int): MotionState = when (raw) {
