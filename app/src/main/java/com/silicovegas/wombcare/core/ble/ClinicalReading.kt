@@ -56,12 +56,6 @@ data class ClinicalReading(
     val decelPerMin: Double? = null,
     /** Standard deviation of FHR, bpm (firmware sends SD, not variance). */
     val hrSdBpm: Double? = null,
-    /**
-     * The MOTHER's heart rate in bpm, or null when the device isn't sending it. The firmware
-     * already isolates the maternal ECG (it cancels it to extract the fetal signal), so this
-     * rides payload v3's spare byte 14; 0 means "not provided". See docs/BLE_CONTRACT.md §5.
-     */
-    val maternalHrBpm: Int? = null,
 ) {
     val hasValidFhr: Boolean get() = fhrBpm != null
 

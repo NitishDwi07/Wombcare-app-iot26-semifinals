@@ -255,7 +255,7 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
 | 10 | `hr_sd_x10` | ÷10 ⇒ FHR std-dev in bpm (SD, not variance) |
 | 11–12 | `timestamp` | u16 LE window counter → `deviceMinute` |
 | 13 | `motion_state` | 0 resting / 1 sitting / 2 walking → `MotionState` (explicit now, not derived) |
-| 14 | `maternal_hr_bpm` | the MOTHER's heart rate in bpm; **0 = not sent** → "--". (Was "reserved"; the firmware isolates the maternal ECG to cancel it, so it already has this value — write it here.) |
+| 14 | `reserved` | 0 |
 
 **Rules the app enforces:**
 - **NSP = 3 (analysis failed) is never shown as Normal, and never as "Unknown".** It is

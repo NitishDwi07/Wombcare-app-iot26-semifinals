@@ -34,7 +34,6 @@ object ReadingWire {
         r.accelPerMin?.let { put("accel", it) }
         r.decelPerMin?.let { put("decel", it) }
         r.hrSdBpm?.let { put("hrSd", it) }
-        r.maternalHrBpm?.let { put("mhr", it) }
     }
 
     fun fromSnapshot(s: DataSnapshot): ClinicalReading? {
@@ -63,7 +62,6 @@ object ReadingWire {
             accelPerMin = dbl("accel"),
             decelPerMin = dbl("decel"),
             hrSdBpm = dbl("hrSd"),
-            maternalHrBpm = int("mhr"),
         )
     }
 

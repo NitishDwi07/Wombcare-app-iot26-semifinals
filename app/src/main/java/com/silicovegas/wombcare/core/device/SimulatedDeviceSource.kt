@@ -4,7 +4,6 @@ import com.silicovegas.wombcare.core.ble.ClinicalReading
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParseResult
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParser
 import com.silicovegas.wombcare.core.ble.ConnectionState
-import com.silicovegas.wombcare.core.ble.MotionState
 import com.silicovegas.wombcare.core.ble.WellnessStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -83,9 +82,6 @@ class SimulatedDeviceSource(
                         accelPerMin = ctg.accel,
                         decelPerMin = ctg.decel,
                         hrSdBpm = ctg.hrSd,
-                        // Believable maternal HR: a resting ~82 bpm that ticks up a little when
-                        // she's moving (motion != resting), so demo shows a live mother's pulse.
-                        maternalHrBpm = if (w.motionState == MotionState.RESTING) 82 else 92,
                         signalLow = w.signalLow,
                     ),
                     batteryPercent = battery,

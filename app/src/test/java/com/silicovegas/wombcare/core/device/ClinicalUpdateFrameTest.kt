@@ -72,11 +72,10 @@ class ClinicalUpdateFrameTest {
                 nsp = WellnessStatus.SUSPECT, confidence = 77, fhrBpm = 148, kickCount = 6,
                 deviceMinute = 300, motionState = MotionState.SITTING,
                 meanHrBpm = 150, mstvBpm = 6.5, mltvBpm = 12.0,
-                accelPerMin = 3.0, decelPerMin = 1.0, hrSdBpm = 4.5, maternalHrBpm = 84,
+                accelPerMin = 3.0, decelPerMin = 1.0, hrSdBpm = 4.5,
             ),
         )
         assertEquals(3, r.payloadVersion)
-        assertEquals(84, r.maternalHrBpm) // byte 14 carries the mother's heart rate
         assertEquals(WellnessStatus.SUSPECT, r.status) // proves NSP came out of flags bits 3-4
         assertEquals(77, r.confidencePercent)
         assertEquals(148, r.fhrBpm)

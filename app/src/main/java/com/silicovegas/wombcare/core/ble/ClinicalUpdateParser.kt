@@ -127,8 +127,6 @@ object ClinicalUpdateParser {
             accelPerMin = ctg(bytes.u8(7), 10.0),
             decelPerMin = ctg(bytes.u8(8), 10.0),
             hrSdBpm = ctg(bytes.u8(10), 10.0),
-            // byte 14 (was "reserved"): maternal heart rate in bpm; 0 = not sent.
-            maternalHrBpm = bytes.u8(14).takeIf { it > 0 },
         )
     }
 
