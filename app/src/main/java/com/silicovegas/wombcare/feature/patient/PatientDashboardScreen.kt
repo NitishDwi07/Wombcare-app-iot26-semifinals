@@ -220,11 +220,11 @@ fun PatientDashboardScreen(
                 }
             }
 
-            // Summary KPIs — the mother's "daily overview" tiles. Baby's and mother's heart
+            // Summary KPIs — the mother's "daily overview" tiles. Fetal and mother's heart
             // rates sit side by side.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
-                    label = "Baby's heart rate",
+                    label = stringResource(R.string.label_fhr),
                     value = latest?.fhrBpm?.toString(),
                     unit = stringResource(R.string.unit_bpm),
                     icon = Icons.Rounded.MonitorHeart,
