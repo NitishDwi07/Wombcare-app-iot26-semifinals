@@ -56,6 +56,22 @@ data class ClinicalReading(
     val decelPerMin: Double? = null,
     /** Standard deviation of FHR, bpm (firmware sends SD, not variance). */
     val hrSdBpm: Double? = null,
+    /**
+     * The MOTHER's heart rate in bpm (payload v4, byte 14). Null unless the device says the
+     * measurement is valid — the mother's own pulse doesn't depend on the fetal signal, so
+     * it's present even on a rejected window. See docs/BLE_CONTRACT.md §6.
+     */
+    val maternalHrBpm: Int? = null,
+    /**
+     * Payload v4 `flags2` bit 0: the firmware has confirmed a SUSTAINED loss of the fetal
+     * heartbeat (it owns the multi-minute history; the app must not re-derive it).
+     */
+    val fetalNotDetected: Boolean = false,
+    /**
+     * Payload v4 `flags2` bit 4: the abdominal sensor is picking up the MOTHER's heartbeat,
+     * not the baby's — actionable: reposition the sensor.
+     */
+    val fetalIsMaternal: Boolean = false,
 ) {
     val hasValidFhr: Boolean get() = fhrBpm != null
 

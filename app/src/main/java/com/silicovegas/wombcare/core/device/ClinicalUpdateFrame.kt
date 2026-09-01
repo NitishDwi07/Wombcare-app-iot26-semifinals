@@ -67,12 +67,17 @@ object ClinicalUpdateFrame {
         )
     }
 
-    // v3 flag bits (byte 1) — see wombcare_ble.h.
+    // v3/v4 flag bits (byte 1) — see wombcare_ble.h.
     private const val V3_FLAG_MONITORING = 1 shl 1
     private const val V3_FLAG_SENSOR_FAULT = 1 shl 2
     private const val V3_NSP_SHIFT = 3
     private const val V3_FLAG_MOTION = 1 shl 5
     private const val V3_FLAG_PERSIST_ALERT = 1 shl 7
+
+    // v4 flags2 bits (byte 15).
+    private const val F2_FETAL_NOT_DETECTED = 1 shl 0
+    private const val F2_MHR_VALID = 1 shl 2
+    private const val F2_FETAL_IS_MATERNAL = 1 shl 4
 
     /**
      * Payload v3 (15 bytes) — the Wombcare_8PreFinal frame. Mirrors the firmware packing in
@@ -119,6 +124,43 @@ object ClinicalUpdateFrame {
             motionByte(motionState),                        // byte 13
             0,                                              // byte 14: reserved
         )
+    }
+
+    /**
+     * Payload v4 (16 bytes) — the current Wombcare_8PreFinal frame: v3's 15 bytes plus a
+     * maternal-HR byte (14) and a second flags byte (15). Mirrors `wombcare_ble.c`. Maternal
+     * HR is only marked valid (MHR_VALID) when [maternalHrBpm] > 0.
+     */
+    fun v4(
+        nsp: WellnessStatus,
+        confidence: Int,
+        fhrBpm: Int,
+        kickCount: Int,
+        deviceMinute: Int,
+        motionState: MotionState,
+        meanHrBpm: Int,
+        mstvBpm: Double,
+        mltvBpm: Double,
+        accelPerMin: Double,
+        decelPerMin: Double,
+        hrSdBpm: Double,
+        maternalHrBpm: Int = 0,
+        fetalNotDetected: Boolean = false,
+        fetalIsMaternal: Boolean = false,
+        alert: Boolean = nsp == WellnessStatus.PATHOLOGIC,
+        signalLow: Boolean = false,
+    ): ByteArray {
+        val frame = v3(
+            nsp, confidence, fhrBpm, kickCount, deviceMinute, motionState,
+            meanHrBpm, mstvBpm, mltvBpm, accelPerMin, decelPerMin, hrSdBpm, alert, signalLow,
+        )
+        frame[0] = 4 // bump version
+        frame[14] = maternalHrBpm.coerceIn(0, 255).toByte() // byte 14: maternal HR (was reserved)
+        var flags2 = 0
+        if (maternalHrBpm > 0) flags2 = flags2 or F2_MHR_VALID
+        if (fetalNotDetected) flags2 = flags2 or F2_FETAL_NOT_DETECTED
+        if (fetalIsMaternal) flags2 = flags2 or F2_FETAL_IS_MATERNAL
+        return frame + byteArrayOf(flags2.toByte()) // byte 15: flags2 → total 16 bytes
     }
 
     private fun scaled(v: Double, k: Double): Byte = ((v * k) + 0.5).toInt().coerceIn(0, 255).toByte()

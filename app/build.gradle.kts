@@ -25,8 +25,8 @@ android {
         applicationId = "com.silicovegas.wombcare"
         minSdk = 26          // BLE + java.time available without desugaring
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.7.1"
+        versionCode = 13
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
