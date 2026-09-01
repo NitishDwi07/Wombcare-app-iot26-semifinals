@@ -34,6 +34,7 @@ object ReadingWire {
         r.accelPerMin?.let { put("accel", it) }
         r.decelPerMin?.let { put("decel", it) }
         r.hrSdBpm?.let { put("hrSd", it) }
+        r.maternalHrBpm?.let { put("mhr", it) }
     }
 
     fun fromSnapshot(s: DataSnapshot): ClinicalReading? {
@@ -62,6 +63,7 @@ object ReadingWire {
             accelPerMin = dbl("accel"),
             decelPerMin = dbl("decel"),
             hrSdBpm = dbl("hrSd"),
+            maternalHrBpm = int("mhr"),
         )
     }
 
@@ -81,9 +83,9 @@ object ReadingWire {
     }
 
     private fun statusOf(v: Int) = when (v) {
-        1 -> WellnessStatus.SUSPECT
         2 -> WellnessStatus.PATHOLOGIC
-        3 -> WellnessStatus.UNKNOWN
+        // 1 Suspect and 3 (analysis failed) both surface as Suspect — never "Unknown".
+        1, 3 -> WellnessStatus.SUSPECT
         else -> WellnessStatus.NORMAL
     }
 

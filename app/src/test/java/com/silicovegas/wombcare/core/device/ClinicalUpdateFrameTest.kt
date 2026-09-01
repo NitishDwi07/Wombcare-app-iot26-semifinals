@@ -92,14 +92,14 @@ class ClinicalUpdateFrameTest {
     }
 
     @Test
-    fun `v3 analysis-failed maps to UNKNOWN, never Normal`() {
+    fun `v3 analysis-failed is shown as Suspect, never Unknown or Normal`() {
         // Build a raw v3 frame with NSP = 3 in flag bits 3-4.
         val bytes = ByteArray(ClinicalUpdateParser.PAYLOAD_V3_SIZE)
         bytes[0] = 3
         bytes[1] = (3 shl 3).toByte() // NSP = 3 (analysis failed)
         bytes[3] = 140.toByte()
         val r = roundTrip(bytes)
-        assertEquals(WellnessStatus.UNKNOWN, r.status)
+        assertEquals(WellnessStatus.SUSPECT, r.status)
     }
 
     @Test
@@ -113,5 +113,51 @@ class ClinicalUpdateFrameTest {
         assertNull(r.mltvBpm)
         assertNull(r.accelPerMin)
         assertNull(r.meanHrBpm)
+    }
+
+    // ---- Payload v4 (16 bytes: v3 + maternal HR + flags2) -------------------------------
+
+    @Test
+    fun `v4 carries maternal HR only when the device marks it valid`() {
+        val r = roundTrip(
+            ClinicalUpdateFrame.v4(
+                nsp = WellnessStatus.NORMAL, confidence = 90, fhrBpm = 142, kickCount = 3,
+                deviceMinute = 120, motionState = MotionState.RESTING,
+                meanHrBpm = 142, mstvBpm = 6.0, mltvBpm = 12.0,
+                accelPerMin = 2.0, decelPerMin = 0.0, hrSdBpm = 4.0,
+                maternalHrBpm = 84, // > 0 → MHR_VALID set by the encoder
+            ),
+        )
+        assertEquals(4, r.payloadVersion)
+        assertEquals(84, r.maternalHrBpm)
+        assertEquals(142, r.fhrBpm) // fetal HR still separate and intact
+    }
+
+    @Test
+    fun `v4 with no maternal lock reports null, not zero`() {
+        val r = roundTrip(
+            ClinicalUpdateFrame.v4(
+                nsp = WellnessStatus.NORMAL, confidence = 90, fhrBpm = 140, kickCount = 0,
+                deviceMinute = 1, motionState = MotionState.RESTING,
+                meanHrBpm = 140, mstvBpm = 5.0, mltvBpm = 10.0,
+                accelPerMin = 1.0, decelPerMin = 0.0, hrSdBpm = 3.0,
+                maternalHrBpm = 0, // MHR_VALID stays clear
+            ),
+        )
+        assertNull(r.maternalHrBpm)
+    }
+
+    @Test
+    fun `v4 sensor-fault window still reports maternal HR`() {
+        // Maternal HR is measured on the chest lead, so it survives a rejected fetal window.
+        val bytes = ByteArray(ClinicalUpdateParser.PAYLOAD_V4_SIZE)
+        bytes[0] = 4
+        bytes[1] = (1 shl 2).toByte()  // FLAG_SENSOR_FAULT → CTG null
+        bytes[14] = 88.toByte()        // maternal HR
+        bytes[15] = (1 shl 2).toByte() // F2_MHR_VALID
+        val r = roundTrip(bytes)
+        assertTrue(r.signalLow)
+        assertNull(r.mstvBpm)          // fetal CTG suppressed
+        assertEquals(88, r.maternalHrBpm) // maternal survives
     }
 }

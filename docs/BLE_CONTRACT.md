@@ -243,7 +243,7 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
 | Byte | Field | App decode |
 |---|---|---|
 | 0 | `version` == 3 | selects the v3 layout |
-| 1 | `flags` | NSP = bits 3–4 (0 N, 1 S, 2 P, **3 = analysis failed → UNKNOWN**); bit7 persistent alert; bit6 sustained bradycardia; bit5 motion detected; bit2 sensor fault (→ `signalLow`); bit1 monitoring; bit0 initializing |
+| 1 | `flags` | NSP = bits 3–4 (0 N, 1 S, 2 P, **3 = analysis failed → shown as Suspect**); bit7 persistent alert; bit6 sustained bradycardia; bit5 motion detected; bit2 sensor fault (→ `signalLow`); bit1 monitoring; bit0 initializing |
 | 2 | `confidence` | 0–100 |
 | 3 | `fhr_bpm` (LB) | 0 ⇒ null ("no lock") |
 | 4 | `kick_count` | fetal movements this window |
@@ -258,8 +258,8 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
 | 14 | `reserved` | 0 |
 
 **Rules the app enforces:**
-- **NSP = 3 (analysis failed) is never shown as Normal.** It decodes to `UNKNOWN` and
-  round-trips through Firebase as `3` (see `ReadingWire`/`PatientSyncRepository`).
+- **NSP = 3 (analysis failed) is never shown as Normal, and never as "Unknown".** It is
+  surfaced as **Suspect** (a caution the mother/doctor can act on) at every decode point.
 - When **bit2 (sensor fault)** is set, bytes 5–10 are meaningless zeros, so all CTG values
   decode to **null** ("--"), and `signalLow` dims confidence.
 - **Battery is not in the payload** — it stays on the standard Battery Service (0x180F /
@@ -268,3 +268,21 @@ app decodes v3 on its own path (`ClinicalUpdateParser.parseV3`). UUIDs are uncha
   **doctor's analytical dashboard**; the mother's summary keeps NSP/FHR/kicks/confidence/battery.
 
 Older devices sending v1 (8 bytes) still work unchanged via the legacy decode path.
+
+---
+
+## Payload v4 — 16 bytes (current Wombcare_8PreFinal frame)
+
+v4 = v3 with two additions; **bytes 0–13 are byte-for-byte identical to v3**. The app decodes
+v3 and v4 on the same path (`ClinicalUpdateParser.parseModern`); `btconf` length is now `16`.
+
+| Byte | Field | App decode |
+|---|---|---|
+| 0–13 | *(same as v3)* | version=4, flags(NSP…), confidence, fhr, kick, mstv/mltv/accel/decel, mean HR, hr-sd, timestamp, motion |
+| 14 | `mhr_bpm` | **Mother's heart rate**, bpm. Valid **only** when `flags2` bit2 (MHR_VALID) is set; otherwise 0 = "not measured" → `maternalHrBpm` is null. Measured on the chest lead, so it's valid even on a sensor-fault window. |
+| 15 | `flags2` | bit0 `FETAL_NOT_DETECTED` (sustained loss of fetal heartbeat — firmware owns the multi-minute history; app shows it as-is), bit1 `FETAL_HR_LOW`, bit2 `MHR_VALID`, bit3 `FHR_HIGH_REJECTED`, bit4 `FETAL_IS_MATERNAL` (sensor on the mother → reposition) |
+
+**App mapping:** byte 14 → `ClinicalReading.maternalHrBpm` (shown as "Mother's heart rate" on
+the mother dashboard beside baby's HR, and on the doctor view). `flags2` bit0 →
+`fetalNotDetected`, bit4 → `fetalIsMaternal` (both actionable). A v1/v2/v3 device still decodes
+correctly — maternal HR is simply null there.

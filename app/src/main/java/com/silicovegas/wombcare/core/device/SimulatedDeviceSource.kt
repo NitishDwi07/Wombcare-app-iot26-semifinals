@@ -4,6 +4,7 @@ import com.silicovegas.wombcare.core.ble.ClinicalReading
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParseResult
 import com.silicovegas.wombcare.core.ble.ClinicalUpdateParser
 import com.silicovegas.wombcare.core.ble.ConnectionState
+import com.silicovegas.wombcare.core.ble.MotionState
 import com.silicovegas.wombcare.core.ble.WellnessStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -69,7 +70,7 @@ class SimulatedDeviceSource(
                 val battery = (92 - minute / 4).coerceIn(70, 92)
                 val ctg = ctgFor(w)
                 emit(
-                    ClinicalUpdateFrame.v3(
+                    ClinicalUpdateFrame.v4(
                         nsp = w.nsp,
                         confidence = w.confidence,
                         fhrBpm = w.fhrBpm,
@@ -82,6 +83,8 @@ class SimulatedDeviceSource(
                         accelPerMin = ctg.accel,
                         decelPerMin = ctg.decel,
                         hrSdBpm = ctg.hrSd,
+                        // Believable maternal HR: ~82 bpm at rest, a little higher when moving.
+                        maternalHrBpm = if (w.motionState == MotionState.RESTING) 82 else 92,
                         signalLow = w.signalLow,
                     ),
                     batteryPercent = battery,

@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Sensors
@@ -219,15 +220,25 @@ fun PatientDashboardScreen(
                 }
             }
 
-            // Summary KPIs — the mother's "daily overview" tiles.
+            // Summary KPIs — the mother's "daily overview" tiles. Baby's and mother's heart
+            // rates sit side by side.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
-                    label = stringResource(R.string.label_fhr),
+                    label = "Baby's heart rate",
                     value = latest?.fhrBpm?.toString(),
                     unit = stringResource(R.string.unit_bpm),
                     icon = Icons.Rounded.MonitorHeart,
                     modifier = Modifier.weight(1f),
                 )
+                StatTile(
+                    label = "Mother's heart rate",
+                    value = latest?.maternalHrBpm?.toString(),
+                    unit = stringResource(R.string.unit_bpm),
+                    icon = Icons.Rounded.Favorite,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = stringResource(R.string.label_kicks),
                     value = ui.session?.totalKicks?.toString() ?: "0",
@@ -235,8 +246,6 @@ fun PatientDashboardScreen(
                     icon = Icons.Rounded.SportsSoccer,
                     modifier = Modifier.weight(1f),
                 )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = "AI confidence",
                     value = latest?.confidencePercent?.toString(),
@@ -246,13 +255,6 @@ fun PatientDashboardScreen(
                         stringResource(R.string.note_signal_low)
                     } else null,
                     dimmed = latest?.signalLow == true,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    label = "Device battery",
-                    value = latest?.batteryPercent?.toString(),
-                    unit = stringResource(R.string.unit_percent),
-                    icon = Icons.Rounded.BatteryFull,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -265,10 +267,10 @@ fun PatientDashboardScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
-                    label = "Session length",
-                    value = if (ui.session == null) null else formatElapsed(elapsedSec),
-                    icon = Icons.Rounded.Schedule,
-                    valueStyle = MaterialTheme.typography.headlineMedium,
+                    label = "Device battery",
+                    value = latest?.batteryPercent?.toString(),
+                    unit = stringResource(R.string.unit_percent),
+                    icon = Icons.Rounded.BatteryFull,
                     modifier = Modifier.weight(1f),
                 )
             }

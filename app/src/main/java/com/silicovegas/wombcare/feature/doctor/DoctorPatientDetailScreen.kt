@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.ShowChart
@@ -150,14 +151,21 @@ fun DoctorPatientDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
+                    label = "Mother's heart rate",
+                    value = latestReading?.maternalHrBpm?.toString(),
+                    unit = "BPM",
+                    icon = Icons.Rounded.Favorite,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StatTile(
                     label = "Fetal movements",
                     value = (live?.kickTotal ?: stats.totalKicks).toString(),
                     unit = "kicks",
                     icon = Icons.Rounded.SportsSoccer,
                     modifier = Modifier.weight(1f),
                 )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = "AI confidence",
                     value = latestReading?.confidencePercent?.toString(),
@@ -165,6 +173,8 @@ fun DoctorPatientDetailScreen(
                     icon = Icons.Rounded.Speed,
                     modifier = Modifier.weight(1f),
                 )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 StatTile(
                     label = "Device battery",
                     value = latestReading?.batteryPercent?.toString(),
@@ -172,6 +182,7 @@ fun DoctorPatientDetailScreen(
                     icon = Icons.Rounded.BatteryFull,
                     modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.weight(1f))
             }
 
             // CTG analytics — transmitted as of payload v3. "--" on older devices, or on a
@@ -449,9 +460,8 @@ private fun StepperRow(
 private fun fmt1(d: Double?): String? = d?.let { String.format(java.util.Locale.US, "%.1f", it) }
 
 private fun statusOf(nsp: Int) = when (nsp) {
-    1 -> WellnessStatus.SUSPECT
     2 -> WellnessStatus.PATHOLOGIC
-    3 -> WellnessStatus.UNKNOWN
+    1, 3 -> WellnessStatus.SUSPECT // 3 = analysis failed, shown as Suspect, never Unknown
     else -> WellnessStatus.NORMAL
 }
 
