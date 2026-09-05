@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MonitorHeart
@@ -73,6 +74,7 @@ fun PatientDashboardScreen(
     onOpenSettings: () -> Unit,
     onOpenShare: () -> Unit,
     onOpenScan: () -> Unit,
+    onOpenHowTo: () -> Unit,
     chosenDeviceId: String?,
     onDeviceConsumed: () -> Unit,
     vm: MonitoringViewModel = hiltViewModel(),
@@ -86,6 +88,15 @@ fun PatientDashboardScreen(
         if (chosenDeviceId != null) {
             vm.start(chosenDeviceId)
             onDeviceConsumed()
+        }
+    }
+
+    // First launch → open the setup walkthrough once, then never auto-open again.
+    LaunchedEffect(Unit) {
+        val pref = com.silicovegas.wombcare.core.data.HowToPreference(context)
+        if (!pref.hasSeen()) {
+            pref.markSeen()
+            onOpenHowTo()
         }
     }
 
@@ -137,6 +148,9 @@ fun PatientDashboardScreen(
             TopAppBar(
                 title = { Text("WombCare") },
                 actions = {
+                    IconButton(onClick = onOpenHowTo) {
+                        Icon(Icons.AutoMirrored.Rounded.HelpOutline, contentDescription = "How to use")
+                    }
                     IconButton(onClick = onOpenShare) {
                         Icon(Icons.Rounded.Share, contentDescription = "Share & care team")
                     }
