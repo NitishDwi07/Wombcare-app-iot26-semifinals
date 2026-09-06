@@ -33,9 +33,13 @@ fun PatientNavGraph(
                 onOpenSettings = { nav.navigate(Routes.PATIENT_SETTINGS) },
                 onOpenShare = { nav.navigate(Routes.PATIENT_SHARE) },
                 onOpenScan = { nav.navigate(Routes.PATIENT_SCAN) },
+                onOpenHowTo = { nav.navigate(Routes.PATIENT_HOWTO) },
                 chosenDeviceId = chosenDevice,
                 onDeviceConsumed = { entry.savedStateHandle["chosenDevice"] = null },
             )
+        }
+        composable(Routes.PATIENT_HOWTO) {
+            HowToUseScreen(onDone = { nav.popBackStack() })
         }
         composable(Routes.PATIENT_SCAN) {
             DeviceScanScreen(
@@ -53,6 +57,7 @@ fun PatientNavGraph(
             SettingsScreen(
                 onBack = { nav.popBackStack() },
                 onSignOut = onSignOut,
+                onOpenHowTo = { nav.navigate(Routes.PATIENT_HOWTO) },
             )
         }
     }

@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.core.ui.components.DangerButton
 import com.silicovegas.wombcare.core.ui.components.FormError
+import com.silicovegas.wombcare.core.ui.components.SecondaryButton
 import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
 import com.silicovegas.wombcare.core.ui.theme.Spacing
@@ -41,6 +42,7 @@ import com.silicovegas.wombcare.core.ui.theme.Spacing
 fun SettingsScreen(
     onBack: () -> Unit,
     onSignOut: () -> Unit,
+    onOpenHowTo: () -> Unit = {},
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val demoMode by vm.demoMode.collectAsStateWithLifecycle()
@@ -89,6 +91,16 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize().padding(pad).padding(Spacing.screen),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
+            SectionCard(title = "Guide") {
+                Text(
+                    "New to WombCare, or need a refresher on placing the sensors?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(Spacing.md))
+                SecondaryButton("How to use WombCare", onClick = onOpenHowTo)
+            }
+
             SectionCard(title = "Device") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

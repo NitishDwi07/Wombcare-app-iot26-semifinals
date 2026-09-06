@@ -28,6 +28,7 @@ object Routes {
     const val PATIENT_SETTINGS = "patient_settings"
     const val PATIENT_SHARE = "patient_share"
     const val PATIENT_SCAN = "patient_scan"
+    const val PATIENT_HOWTO = "patient_howto"
 
     // Doctor subtree.
     const val DOCTOR_LIST = "doctor_list"
