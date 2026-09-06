@@ -1,5 +1,7 @@
 package com.silicovegas.wombcare.feature.patient
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -35,9 +38,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.silicovegas.wombcare.R
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
 import com.silicovegas.wombcare.core.ui.components.SecondaryButton
 import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
@@ -58,7 +64,10 @@ fun HowToUseScreen(onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
     val last = pager.currentPage == PAGES - 1
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
+    // Surface sets the content color to onBackground, so default-colored text stays visible
+    // in dark mode (a plain Column leaves it defaulting to black).
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+      Column(Modifier.fillMaxSize().systemBarsPadding()) {
         // top bar: title + Skip
         Row(
             Modifier.fillMaxWidth().padding(start = Spacing.screen, end = Spacing.sm, top = Spacing.sm),
@@ -132,6 +141,7 @@ fun HowToUseScreen(onDone: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
         }
+      }
     }
 }
 
@@ -183,18 +193,23 @@ private fun DiagramHeader(step: String, title: String) {
 }
 
 @Composable
-private fun Diagram(highlight: Set<Int>, showSeparation: Boolean = false) {
-    // Always a clean light panel, so the figure reads well in either app theme.
+private fun Diagram(@DrawableRes image: Int) {
+    // A real annotated photo on a clean panel that matches its background.
     Surface(
-        color = Color(0xFFFBF6F7),
+        color = Color(0xFFF4EFEA),
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Box(
-            Modifier.fillMaxWidth().padding(vertical = Spacing.md),
+            Modifier.fillMaxWidth().padding(Spacing.sm),
             contentAlignment = Alignment.Center,
         ) {
-            PlacementDiagram(highlight, showSeparation = showSeparation, modifier = Modifier.height(360.dp))
+            Image(
+                painter = painterResource(image),
+                contentDescription = "Electrode placement shown on an expectant mother",
+                modifier = Modifier.heightIn(max = 440.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
     }
     Spacer(Modifier.height(Spacing.sm))
@@ -222,7 +237,7 @@ private fun Lead(color: Color, text: String) {
 private fun ChestPage() {
     val s = LocalStatusColors.current
     DiagramHeader("1 · Placement — chest", "Three pads on the chest")
-    Diagram(setOf(1, 2, 3))
+    Diagram(R.drawable.howto_chest)
     Spacer(Modifier.height(Spacing.lg))
     Lead(Color(0xFFDE3C41), "RED — hollow below the mother's RIGHT collarbone")
     Lead(Color(0xFFCF8A12), "YELLOW — hollow below the mother's LEFT collarbone")
@@ -237,7 +252,7 @@ private fun ChestPage() {
 @Composable
 private fun BellyPage() {
     DiagramHeader("2 · Placement — belly", "Three pads on the belly")
-    Diagram(setOf(4, 5, 6))
+    Diagram(R.drawable.howto_belly)
     Spacer(Modifier.height(Spacing.lg))
     Lead(Color(0xFFDE3C41), "RED — on the midline, ABOVE the navel (fundus)")
     Lead(Color(0xFFCF8A12), "YELLOW — on the midline, BELOW the navel (suprapubic)")
@@ -249,7 +264,7 @@ private fun BellyPage() {
 @Composable
 private fun RulePage() {
     DiagramHeader("3 · The one rule", "Keep the belly pads 10–15 cm apart")
-    Diagram(setOf(4, 5), showSeparation = true)
+    Diagram(R.drawable.howto_rule)
     Spacer(Modifier.height(Spacing.lg))
     Body("Place the two belly pads a hand-width apart. Too close, and the fetal signal cancels out.")
 }
