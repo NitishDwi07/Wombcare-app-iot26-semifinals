@@ -97,6 +97,7 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(Spacing.md))
                 SecondaryButton("How to use WombCare", onClick = onOpenHowTo)
             }
 

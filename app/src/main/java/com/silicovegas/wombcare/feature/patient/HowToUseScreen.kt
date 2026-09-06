@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,7 +58,7 @@ fun HowToUseScreen(onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
     val last = pager.currentPage == PAGES - 1
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
         // top bar: title + Skip
         Row(
             Modifier.fillMaxWidth().padding(start = Spacing.screen, end = Spacing.sm, top = Spacing.sm),
@@ -182,10 +184,25 @@ private fun DiagramHeader(step: String, title: String) {
 
 @Composable
 private fun Diagram(highlight: Set<Int>, showSeparation: Boolean = false) {
-    PlacementDiagram(
-        highlight = highlight,
-        showSeparation = showSeparation,
-        modifier = Modifier.fillMaxHeight(0.5f),
+    // Always a clean light panel, so the figure reads well in either app theme.
+    Surface(
+        color = Color(0xFFFBF6F7),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().padding(vertical = Spacing.md),
+            contentAlignment = Alignment.Center,
+        ) {
+            PlacementDiagram(highlight, showSeparation = showSeparation, modifier = Modifier.height(360.dp))
+        }
+    }
+    Spacer(Modifier.height(Spacing.sm))
+    Text(
+        "Shown as if you're facing the mother — her right is on your left.",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
     )
 }
 
@@ -207,12 +224,12 @@ private fun ChestPage() {
     DiagramHeader("1 · Placement — chest", "Three pads on the chest")
     Diagram(setOf(1, 2, 3))
     Spacer(Modifier.height(Spacing.lg))
-    Lead(Color(0xFFDE3C41), "RED — flat hollow below the RIGHT collarbone")
-    Lead(Color(0xFFCF8A12), "YELLOW — flat hollow below the LEFT collarbone")
-    Lead(Color(0xFF1F9B74), "GREEN — lower-LEFT ribcage")
+    Lead(Color(0xFFDE3C41), "RED — hollow below the mother's RIGHT collarbone")
+    Lead(Color(0xFFCF8A12), "YELLOW — hollow below the mother's LEFT collarbone")
+    Lead(Color(0xFF1F9B74), "GREEN — lower-LEFT ribs (mother's left side)")
     Spacer(Modifier.height(Spacing.sm))
     Text(
-        "This channel captures a clean maternal reference.",
+        "These three sit on the chest and give a clean reading of the mother's own heartbeat.",
         style = MaterialTheme.typography.bodyMedium, color = s.suspect, textAlign = TextAlign.Center,
     )
 }
@@ -222,11 +239,11 @@ private fun BellyPage() {
     DiagramHeader("2 · Placement — belly", "Three pads on the belly")
     Diagram(setOf(4, 5, 6))
     Spacer(Modifier.height(Spacing.lg))
-    Lead(Color(0xFFDE3C41), "RED — upper midline, ABOVE the navel (fundus)")
-    Lead(Color(0xFFCF8A12), "YELLOW — lower midline, BELOW the navel (suprapubic)")
-    Lead(Color(0xFF1F9B74), "GREEN — RIGHT hip bone (iliac crest)")
+    Lead(Color(0xFFDE3C41), "RED — on the midline, ABOVE the navel (fundus)")
+    Lead(Color(0xFFCF8A12), "YELLOW — on the midline, BELOW the navel (suprapubic)")
+    Lead(Color(0xFF1F9B74), "GREEN — the mother's RIGHT hip bone (iliac crest)")
     Spacer(Modifier.height(Spacing.sm))
-    Body("This is where your baby's heartbeat is captured.")
+    Body("These three sit on the belly, where the baby's heartbeat is picked up.")
 }
 
 @Composable
