@@ -10,7 +10,7 @@
 
     <!-- Clinical status. Always rendered with colour AND icon AND this word. -->
     <string name="status_normal">Normal</string>
-    <string name="status_suspect">Suspect</string>
+    <string name="status_suspect">Elevated</string>
     <string name="status_pathologic">Pathologic</string>
     <string name="status_unknown">Unknown</string>
 
