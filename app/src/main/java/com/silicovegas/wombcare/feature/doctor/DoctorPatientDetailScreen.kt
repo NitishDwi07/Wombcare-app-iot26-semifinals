@@ -167,7 +167,7 @@ fun DoctorPatientDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
-                    label = "AI confidence",
+                    label = "AI accuracy",
                     value = latestReading?.confidencePercent?.toString(),
                     unit = "%",
                     icon = Icons.Rounded.Speed,
@@ -329,7 +329,7 @@ private fun RecentTrendsCard(
                     )
                     Text(
                         buildString {
-                            append(if (s.worstNsp == 2) "Pathologic" else "Suspect")
+                            append(if (s.worstNsp == 2) "Pathologic" else "Elevated")
                             s.avgFhr?.let { append(" · avg FHR $it") }
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -401,7 +401,7 @@ private fun ThresholdsCard(
         StepperRow("Reduced variability below", draft.minVariabilityBpm, "bpm", step = 1, range = 1..15) {
             draft = draft.copy(minVariabilityBpm = it)
         }
-        StepperRow("Min. confidence to alert", draft.minConfidencePct, "%", step = 5, range = 0..90) {
+        StepperRow("Min. accuracy to alert", draft.minConfidencePct, "%", step = 5, range = 0..90) {
             draft = draft.copy(minConfidencePct = it)
         }
 

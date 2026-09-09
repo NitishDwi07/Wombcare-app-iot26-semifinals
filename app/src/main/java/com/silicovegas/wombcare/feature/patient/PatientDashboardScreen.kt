@@ -55,13 +55,10 @@ import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
 import com.silicovegas.wombcare.core.ui.components.FormError
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
 import com.silicovegas.wombcare.core.ui.components.SecondaryButton
-import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.components.StatTile
 import com.silicovegas.wombcare.core.ui.components.StatusHeroCard
 import com.silicovegas.wombcare.core.ui.format.label
 import com.silicovegas.wombcare.core.ui.theme.Spacing
-import com.silicovegas.wombcare.feature.patient.charts.FhrTrendChart
-import com.silicovegas.wombcare.feature.patient.charts.NspTimelineStrip
 
 /**
  * The patient's live monitoring screen (P1 + P3 combined). Renders the [MonitoringUiState]
@@ -261,7 +258,7 @@ fun PatientDashboardScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
-                    label = "AI confidence",
+                    label = "AI accuracy",
                     value = latest?.confidencePercent?.toString(),
                     unit = stringResource(R.string.unit_percent),
                     icon = Icons.Rounded.Speed,
@@ -289,15 +286,9 @@ fun PatientDashboardScreen(
                 )
             }
 
-            // Numbers first, then charts — only once there's something real to show.
+            // A clean numeric summary — the graphs were removed for a calmer patient view.
             if (readings.isNotEmpty()) {
                 SessionSummaryCard(readings)
-                SectionCard(title = "Heart rate") {
-                    FhrTrendChart(readings)
-                    Spacer(Modifier.height(Spacing.sm))
-                    NspTimelineStrip(readings)
-                }
-                KickSummaryCard(readings)
             }
 
             // If the link dropped unexpectedly, show WHY (with the GATT code) so a real

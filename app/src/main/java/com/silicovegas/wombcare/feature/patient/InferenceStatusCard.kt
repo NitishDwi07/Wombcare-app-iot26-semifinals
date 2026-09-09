@@ -57,7 +57,7 @@ fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
             )
             InferenceRing(
-                caption = "Suspect",
+                caption = "Elevated",
                 index = 2,
                 percent = pct(stats.suspectWindows, total),
                 color = status.suspect,
