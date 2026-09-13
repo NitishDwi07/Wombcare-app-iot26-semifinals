@@ -36,7 +36,7 @@ object LegalDocs {
             ## 1. What WombCare is
             WombCare is a home wellness-awareness aid for expectant mothers. It reads signals
             from a wearable device and shows fetal heart rate, movement (kick) counts, and a
-            wellness indicator (Normal / Suspect / Pathologic).
+            wellness indicator (Normal / Elevated / Pathologic).
 
             ## 2. What WombCare is NOT
             **WombCare is not a medical device and does not diagnose any condition.** It does

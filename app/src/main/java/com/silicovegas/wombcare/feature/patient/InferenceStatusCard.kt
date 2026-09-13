@@ -57,7 +57,7 @@ fun InferenceStatusCard(stats: SessionStats, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
             )
             InferenceRing(
-                caption = "Suspect",
+                caption = "Elevated",
                 index = 2,
                 percent = pct(stats.suspectWindows, total),
                 color = status.suspect,
@@ -107,10 +107,10 @@ private fun InferenceRing(
             textAlign = TextAlign.Center,
             maxLines = 1,
         )
-        Spacer(Modifier.height(Spacing.sm))
+        Spacer(Modifier.height(Spacing.xs))
         Box(contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(84.dp)) {
-                val stroke = 10.dp.toPx()
+            Canvas(Modifier.size(66.dp)) {
+                val stroke = 8.dp.toPx()
                 val inset = stroke / 2
                 val arcSize = androidx.compose.ui.geometry.Size(
                     size.width - stroke, size.height - stroke,
@@ -140,7 +140,7 @@ private fun InferenceRing(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "$percent%",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = color,
                 )
