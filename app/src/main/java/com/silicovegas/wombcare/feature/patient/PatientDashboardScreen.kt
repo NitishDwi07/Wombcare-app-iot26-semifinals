@@ -189,12 +189,13 @@ fun PatientDashboardScreen(
                 .fillMaxSize()
                 .padding(pad)
                 .padding(horizontal = Spacing.screen),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-
+            Spacer(Modifier.height(Spacing.sm))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 ConnectionChip(ui.connection)
                 if (ui.sourceLabel.isNotEmpty()) {
@@ -306,18 +307,25 @@ private fun CompactTile(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
                 label.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     value ?: "--",
-                    style = MaterialTheme.typography.titleLarge,
+                    // Numbers get a bigger style; word values (e.g. "Resting") stay a touch
+                    // smaller so they don't overflow a narrow tile.
+                    style = if ((value?.length ?: 0) <= 4) MaterialTheme.typography.headlineSmall
+                    else MaterialTheme.typography.titleLarge,
                     color = if (value == null || dim) MaterialTheme.colorScheme.onSurfaceVariant
                     else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -326,9 +334,9 @@ private fun CompactTile(
                     Spacer(Modifier.width(3.dp))
                     Text(
                         unit,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
             }

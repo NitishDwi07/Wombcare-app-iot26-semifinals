@@ -109,8 +109,8 @@ private fun InferenceRing(
         )
         Spacer(Modifier.height(Spacing.xs))
         Box(contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(58.dp)) {
-                val stroke = 7.dp.toPx()
+            Canvas(Modifier.size(66.dp)) {
+                val stroke = 8.dp.toPx()
                 val inset = stroke / 2
                 val arcSize = androidx.compose.ui.geometry.Size(
                     size.width - stroke, size.height - stroke,
@@ -140,7 +140,7 @@ private fun InferenceRing(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "$percent%",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = color,
                 )

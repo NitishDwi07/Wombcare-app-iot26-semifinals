@@ -88,7 +88,7 @@ private fun Metric(label: String, value: String, unit: String, modifier: Modifie
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 value,
-                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
             )
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(4.dp))
