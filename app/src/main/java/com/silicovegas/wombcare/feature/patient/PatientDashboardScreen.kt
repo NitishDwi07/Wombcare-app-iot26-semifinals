@@ -189,9 +189,8 @@ fun PatientDashboardScreen(
                 .fillMaxSize()
                 .padding(pad)
                 .padding(horizontal = Spacing.screen),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Spacer(Modifier.height(Spacing.xs))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -262,6 +261,11 @@ fun PatientDashboardScreen(
                 }
             }
 
+            // Real-time inference status — the share of the session in each class.
+            if (readings.isNotEmpty()) {
+                InferenceStatusCard(stats)
+            }
+
             // Compact vitals grid — 6 tiles in two rows so the whole screen fits, no scroll.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
                 CompactTile("Fetal HR", latest?.fhrBpm?.toString(), "bpm", Modifier.weight(1f))
@@ -277,17 +281,9 @@ fun PatientDashboardScreen(
                 CompactTile("Battery", latest?.batteryPercent?.toString(), "%", Modifier.weight(1f))
             }
 
-            // Compact one-line session summary (the full card lives on the doctor view).
+            // Full session summary card (compact).
             if (readings.isNotEmpty()) {
-                val range = if (stats.minFhr != null && stats.maxFhr != null)
-                    "${stats.minFhr}–${stats.maxFhr} bpm" else "--"
-                Text(
-                    "Avg ${stats.averageFhr ?: "--"} bpm · Range $range",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                SessionSummaryCard(readings)
             }
 
             Spacer(Modifier.weight(1f))

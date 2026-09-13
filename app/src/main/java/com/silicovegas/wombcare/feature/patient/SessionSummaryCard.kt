@@ -59,7 +59,7 @@ fun SessionSummaryCard(readings: List<ClinicalReading>, modifier: Modifier = Mod
                 Modifier.weight(1f),
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Metric("Total kicks", "${s.totalKicks}", "this session", Modifier.weight(1f))
             // One window per SECOND on current firmware, so this is seconds, rolled up.
@@ -88,7 +88,7 @@ private fun Metric(label: String, value: String, unit: String, modifier: Modifie
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 value,
-                style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
+                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
             )
             if (unit.isNotEmpty()) {
                 Spacer(Modifier.width(4.dp))
