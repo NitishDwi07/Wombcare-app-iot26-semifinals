@@ -16,7 +16,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
@@ -188,10 +190,11 @@ fun PatientDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(pad)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.screen),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Spacer(Modifier.height(Spacing.sm))
+            Spacer(Modifier.height(Spacing.xs))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -287,7 +290,7 @@ fun PatientDashboardScreen(
                 SessionSummaryCard(readings)
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(Spacing.sm))
         }
     }
 }
@@ -308,7 +311,7 @@ private fun CompactTile(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
