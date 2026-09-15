@@ -244,8 +244,7 @@ fun PatientDashboardScreen(
                         "Collecting the first reading — ${countdownSec}s"
                     countdownSec != null -> "Almost there…"
                     ui.waitingForFirstReading -> stringResource(R.string.note_first_window)
-                    ui.session != null -> formatElapsed(elapsedSec) + " · worst " +
-                        statusWord(ui.session!!.worstStatus)
+                    ui.session != null -> formatElapsed(elapsedSec)
                     else -> null
                 },
             )
