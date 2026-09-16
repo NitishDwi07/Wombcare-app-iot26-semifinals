@@ -40,10 +40,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -235,6 +237,25 @@ fun PatientDashboardScreen(
             // The device fills a rolling 60-second buffer before its first reading — count it down.
             val countdownSec = if (ui.waitingForFirstReading && isLive)
                 (60 - (nowMs - (liveSinceMs ?: nowMs)) / 1000).coerceIn(0, 60) else null
+
+            // Heartbeat sound (Settings → Sound). A soft lub-dub keeps time with the live fetal
+            // heart rate; its volume tracks the wellness status (loud = Normal, softer for
+            // Elevated / Pathological). One long-lived coroutine reads the freshest status/FHR
+            // each beat via rememberUpdatedState, so tempo and volume follow without restarting.
+            val heartbeatEnabled by vm.heartbeatEnabled.collectAsStateWithLifecycle()
+            val heartbeatPlayer = remember { HeartbeatPlayer(context) }
+            DisposableEffect(Unit) { onDispose { heartbeatPlayer.release() } }
+            val hbStatus = rememberUpdatedState(latest?.status)
+            val hbFhr = rememberUpdatedState(latest?.fhrBpm)
+            LaunchedEffect(heartbeatEnabled, isLive) {
+                if (!heartbeatEnabled || !isLive) return@LaunchedEffect
+                while (true) {
+                    heartbeatPlayer.beat(heartbeatVolumeFor(hbStatus.value))
+                    // Interval from the live fetal HR; default to a calm 140 bpm before a reading.
+                    val bpm = (hbFhr.value ?: 140).coerceIn(50, 220)
+                    kotlinx.coroutines.delay(60000L / bpm)
+                }
+            }
 
             StatusHeroCard(
                 status = latest?.status ?: com.silicovegas.wombcare.core.ble.WellnessStatus.NORMAL,

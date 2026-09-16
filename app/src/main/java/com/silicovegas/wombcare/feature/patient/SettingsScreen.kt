@@ -46,6 +46,7 @@ fun SettingsScreen(
     vm: SettingsViewModel = hiltViewModel(),
 ) {
     val demoMode by vm.demoMode.collectAsStateWithLifecycle()
+    val heartbeatSound by vm.heartbeatSoundEnabled.collectAsStateWithLifecycle()
     val deviceForgotten by vm.deviceForgotten.collectAsStateWithLifecycle()
     val needsManualUnpair by vm.needsManualUnpair.collectAsStateWithLifecycle()
     val deleteState by vm.deleteState.collectAsStateWithLifecycle()
@@ -152,6 +153,26 @@ fun SettingsScreen(
                         onClick = vm::forgetDevice,
                         enabled = !deviceForgotten,
                     )
+                }
+            }
+
+            SectionCard(title = "Sound") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Heartbeat sound", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Play a soft heartbeat in time with the live fetal heart rate. It's " +
+                                "loudest when the status is Normal and gently quieter for " +
+                                "Elevated and Pathological.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(Spacing.sm))
+                    Switch(checked = heartbeatSound, onCheckedChange = vm::setHeartbeatSound)
                 }
             }
 
