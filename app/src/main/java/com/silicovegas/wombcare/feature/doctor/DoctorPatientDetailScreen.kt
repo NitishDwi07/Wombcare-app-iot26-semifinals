@@ -49,7 +49,6 @@ import com.silicovegas.wombcare.core.ui.components.EmptyState
 import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.components.StatTile
 import com.silicovegas.wombcare.core.ui.components.StatusHeroCard
-import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
 import com.silicovegas.wombcare.core.ui.theme.Spacing
 import com.silicovegas.wombcare.feature.patient.charts.FhrTrendChart
 import com.silicovegas.wombcare.feature.patient.charts.NspTimelineStrip
@@ -167,7 +166,7 @@ fun DoctorPatientDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
                 StatTile(
-                    label = "AI confidence",
+                    label = "AI accuracy",
                     value = latestReading?.confidencePercent?.toString(),
                     unit = "%",
                     icon = Icons.Rounded.Speed,
@@ -329,15 +328,10 @@ private fun RecentTrendsCard(
                     )
                     Text(
                         buildString {
-                            append(if (s.worstNsp == 2) "Pathologic" else "Suspect")
-                            s.avgFhr?.let { append(" · avg FHR $it") }
+                            s.avgFhr?.let { append("avg FHR $it") }
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (s.worstNsp == 2) {
-                            LocalStatusColors.current.pathologic
-                        } else {
-                            LocalStatusColors.current.suspect
-                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -401,7 +395,7 @@ private fun ThresholdsCard(
         StepperRow("Reduced variability below", draft.minVariabilityBpm, "bpm", step = 1, range = 1..15) {
             draft = draft.copy(minVariabilityBpm = it)
         }
-        StepperRow("Min. confidence to alert", draft.minConfidencePct, "%", step = 5, range = 0..90) {
+        StepperRow("Min. accuracy to alert", draft.minConfidencePct, "%", step = 5, range = 0..90) {
             draft = draft.copy(minConfidencePct = it)
         }
 

@@ -381,11 +381,20 @@ class BleDeviceSource(
             is ClinicalUpdateParseResult.Success -> {
                 // Merge in the battery from the standard Battery Service if the payload itself
                 // didn't carry one (v1) — so the dashboard shows the device's battery either way.
-                val reading = if (r.reading.batteryPercent == null && lastBatteryPercent != null) {
+                val merged = if (r.reading.batteryPercent == null && lastBatteryPercent != null) {
                     r.reading.copy(batteryPercent = lastBatteryPercent)
                 } else {
                     r.reading
                 }
+                // Live rule: classify the wellness status from the fetal heart rate itself
+                // (110–200 Normal, otherwise Elevated). Only when there's a real FHR lock — a
+                // no-lock window keeps the device's own status. Kick count is forced to 0 on the
+                // live path (kick detection isn't trusted on real hardware yet), which keeps the
+                // session kick total at 0. The demo path (SimulatedDeviceSource) is untouched.
+                val classified = merged.fhrBpm?.let {
+                    merged.copy(status = com.silicovegas.wombcare.core.ble.wellnessFromFhr(it))
+                } ?: merged
+                val reading = classified.copy(kickCountInWindow = 0)
                 _readings.tryEmit(reading)
                 _connectionState.value = ConnectionState.Monitoring
             }

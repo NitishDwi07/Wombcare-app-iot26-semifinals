@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsWalk
@@ -33,17 +36,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.silicovegas.wombcare.R
@@ -55,13 +64,9 @@ import com.silicovegas.wombcare.core.ui.components.DisclaimerFootnote
 import com.silicovegas.wombcare.core.ui.components.FormError
 import com.silicovegas.wombcare.core.ui.components.PrimaryButton
 import com.silicovegas.wombcare.core.ui.components.SecondaryButton
-import com.silicovegas.wombcare.core.ui.components.SectionCard
-import com.silicovegas.wombcare.core.ui.components.StatTile
 import com.silicovegas.wombcare.core.ui.components.StatusHeroCard
 import com.silicovegas.wombcare.core.ui.format.label
 import com.silicovegas.wombcare.core.ui.theme.Spacing
-import com.silicovegas.wombcare.feature.patient.charts.FhrTrendChart
-import com.silicovegas.wombcare.feature.patient.charts.NspTimelineStrip
 
 /**
  * The patient's live monitoring screen (P1 + P3 combined). Renders the [MonitoringUiState]
@@ -160,6 +165,28 @@ fun PatientDashboardScreen(
                 },
             )
         },
+        bottomBar = {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = Spacing.screen)
+                    .padding(top = Spacing.sm, bottom = Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                (ui.connection as? ConnectionState.Failed)?.let { FormError(it.reason) }
+                val cs = ui.connection
+                val busy = cs == ConnectionState.Scanning || cs == ConnectionState.Connecting ||
+                    cs == ConnectionState.Pairing || cs.isLive || cs == ConnectionState.SignalLost
+                if (busy) {
+                    SecondaryButton("Stop", onClick = vm::stop, modifier = Modifier.fillMaxWidth())
+                } else {
+                    PrimaryButton(
+                        "Start monitoring",
+                        onClick = ::startMonitoring,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                DisclaimerFootnote()
+            }
+        },
     ) { pad ->
         Column(
             modifier = Modifier
@@ -167,13 +194,13 @@ fun PatientDashboardScreen(
                 .padding(pad)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.screen),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Spacer(Modifier.height(Spacing.xs))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 ConnectionChip(ui.connection)
                 if (ui.sourceLabel.isNotEmpty()) {
@@ -189,133 +216,138 @@ fun PatientDashboardScreen(
             val readings = ui.session?.readings?.filter { !it.isPlaceholder }.orEmpty()
             val stats = statsOf(readings)
 
-            // Live session clock: real elapsed seconds since the session began, ticking every
-            // second, formatted sec → min → hr (not the per-window count).
+            // One ticker drives both the first-reading countdown and the session clock; it
+            // runs the whole time the link is live.
             val startedAt = ui.session?.startedAtEpochMillis
+            val isLive = ui.connection.isLive
             var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(startedAt) {
-                if (startedAt != null) {
+            var liveSinceMs by remember { mutableStateOf<Long?>(null) }
+            LaunchedEffect(isLive) {
+                if (isLive) {
+                    if (liveSinceMs == null) liveSinceMs = System.currentTimeMillis()
                     while (true) {
                         nowMs = System.currentTimeMillis()
                         kotlinx.coroutines.delay(1000)
                     }
+                } else {
+                    liveSinceMs = null
                 }
             }
             val elapsedSec = startedAt?.let { ((nowMs - it) / 1000).coerceAtLeast(0) } ?: 0L
+            // The device fills a rolling 60-second buffer before its first reading — count it down.
+            val countdownSec = if (ui.waitingForFirstReading && isLive)
+                (60 - (nowMs - (liveSinceMs ?: nowMs)) / 1000).coerceIn(0, 60) else null
+
+            // Heartbeat sound (Settings → Sound). A soft lub-dub keeps time with the live fetal
+            // heart rate; its volume tracks the wellness status (loud = Normal, softer for
+            // Elevated / Pathological). One long-lived coroutine reads the freshest status/FHR
+            // each beat via rememberUpdatedState, so tempo and volume follow without restarting.
+            val heartbeatEnabled by vm.heartbeatEnabled.collectAsStateWithLifecycle()
+            val heartbeatPlayer = remember { HeartbeatPlayer(context) }
+            DisposableEffect(Unit) { onDispose { heartbeatPlayer.release() } }
+            val hbStatus = rememberUpdatedState(latest?.status)
+            val hbFhr = rememberUpdatedState(latest?.fhrBpm)
+            LaunchedEffect(heartbeatEnabled, isLive) {
+                if (!heartbeatEnabled || !isLive) return@LaunchedEffect
+                while (true) {
+                    heartbeatPlayer.beat(heartbeatVolumeFor(hbStatus.value))
+                    // Interval from the live fetal HR; default to a calm 140 bpm before a reading.
+                    val bpm = (hbFhr.value ?: 140).coerceIn(50, 220)
+                    kotlinx.coroutines.delay(60000L / bpm)
+                }
+            }
 
             StatusHeroCard(
                 status = latest?.status ?: com.silicovegas.wombcare.core.ble.WellnessStatus.NORMAL,
                 waiting = ui.waitingForFirstReading,
                 subtitle = when {
+                    countdownSec != null && countdownSec > 0L ->
+                        "Collecting the first reading — ${countdownSec}s"
+                    countdownSec != null -> "Almost there…"
                     ui.waitingForFirstReading -> stringResource(R.string.note_first_window)
-                    ui.session != null -> formatElapsed(elapsedSec) + " · worst " +
-                        statusWord(ui.session!!.worstStatus)
+                    ui.session != null -> formatElapsed(elapsedSec)
                     else -> null
                 },
             )
 
-            // Real-time inference status — share of the session in each class (real numbers).
+            // Real-time inference status — the share of the session in each class.
             if (readings.isNotEmpty()) {
                 InferenceStatusCard(stats)
             }
 
-            // Gentle, actionable guidance when the device is live but the signal is poor —
-            // so a blank FHR reads as "fix the sensor", not "something is wrong with baby".
-            if (ui.connection.isLive && !ui.waitingForFirstReading && latest != null) {
-                when {
-                    latest.fhrBpm == null -> SensorHint(
-                        "No fetal heartbeat detected. Reposition the sensor on your belly and " +
-                            "hold still for a few seconds.",
-                    )
-                    latest.signalLow -> SensorHint(
-                        "Weak signal. Adjust the sensor so it sits snugly, and stay still for " +
-                            "a clearer reading.",
-                    )
-                }
+            // Compact vitals grid — 6 tiles in two rows so the whole screen fits, no scroll.
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+                CompactTile("Fetal HR", latest?.fhrBpm?.toString(), "bpm", Modifier.weight(1f))
+                CompactTile("Mother HR", latest?.maternalHrBpm?.toString(), "bpm", Modifier.weight(1f))
+                CompactTile("Kicks", ui.session?.totalKicks?.toString() ?: "0", "", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+                CompactTile(
+                    "AI accuracy", latest?.confidencePercent?.toString(), "%",
+                    Modifier.weight(1f), dim = latest?.signalLow == true,
+                )
+                CompactTile("Motion", latest?.let { motionWord(it.motionDisplay) }, "", Modifier.weight(1f))
+                CompactTile("Battery", latest?.batteryPercent?.toString(), "%", Modifier.weight(1f))
             }
 
-            // Summary KPIs — the mother's "daily overview" tiles. Fetal and mother's heart
-            // rates sit side by side.
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                StatTile(
-                    label = stringResource(R.string.label_fhr),
-                    value = latest?.fhrBpm?.toString(),
-                    unit = stringResource(R.string.unit_bpm),
-                    icon = Icons.Rounded.MonitorHeart,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    label = "Mother's heart rate",
-                    value = latest?.maternalHrBpm?.toString(),
-                    unit = stringResource(R.string.unit_bpm),
-                    icon = Icons.Rounded.Favorite,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                StatTile(
-                    label = stringResource(R.string.label_kicks),
-                    value = ui.session?.totalKicks?.toString() ?: "0",
-                    unit = stringResource(R.string.unit_kicks),
-                    icon = Icons.Rounded.SportsSoccer,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    label = "AI confidence",
-                    value = latest?.confidencePercent?.toString(),
-                    unit = stringResource(R.string.unit_percent),
-                    icon = Icons.Rounded.Speed,
-                    note = if (latest?.signalLow == true) {
-                        stringResource(R.string.note_signal_low)
-                    } else null,
-                    dimmed = latest?.signalLow == true,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                StatTile(
-                    label = stringResource(R.string.label_motion),
-                    value = latest?.let { motionWord(it.motionDisplay) },
-                    icon = Icons.AutoMirrored.Rounded.DirectionsWalk,
-                    valueStyle = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    label = "Device battery",
-                    value = latest?.batteryPercent?.toString(),
-                    unit = stringResource(R.string.unit_percent),
-                    icon = Icons.Rounded.BatteryFull,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            // Numbers first, then charts — only once there's something real to show.
+            // Full session summary card (compact).
             if (readings.isNotEmpty()) {
                 SessionSummaryCard(readings)
-                SectionCard(title = "Heart rate") {
-                    FhrTrendChart(readings)
-                    Spacer(Modifier.height(Spacing.sm))
-                    NspTimelineStrip(readings)
-                }
-                KickSummaryCard(readings)
             }
-
-            // If the link dropped unexpectedly, show WHY (with the GATT code) so a real
-            // dropout is never mistaken for "never connected".
-            (ui.connection as? ConnectionState.Failed)?.let { FormError(it.reason) }
 
             Spacer(Modifier.height(Spacing.sm))
-            val c = ui.connection
-            val busy = c == ConnectionState.Scanning || c == ConnectionState.Connecting ||
-                c == ConnectionState.Pairing || c.isLive || c == ConnectionState.SignalLost
-            if (busy) {
-                SecondaryButton("Stop", onClick = vm::stop)
-            } else {
-                PrimaryButton("Start monitoring", onClick = ::startMonitoring)
-            }
+        }
+    }
+}
 
-            DisclaimerFootnote()
-            Spacer(Modifier.height(Spacing.lg))
+/** A small, dense stat tile so the whole dashboard fits on one screen. */
+@Composable
+private fun CompactTile(
+    label: String,
+    value: String?,
+    unit: String,
+    modifier: Modifier = Modifier,
+    dim: Boolean = false,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    value ?: "--",
+                    // Numbers get a bigger style; word values (e.g. "Resting") stay a touch
+                    // smaller so they don't overflow a narrow tile.
+                    style = if ((value?.length ?: 0) <= 4) MaterialTheme.typography.headlineSmall
+                    else MaterialTheme.typography.titleLarge,
+                    color = if (value == null || dim) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                if (unit.isNotEmpty() && value != null) {
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        unit,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -333,34 +365,6 @@ private fun formatElapsed(totalSeconds: Long): String {
         h > 0 -> "$h hr $m min"
         m > 0 -> "$m min $s sec"
         else -> "$s sec"
-    }
-}
-
-/** A soft, non-alarming guidance note (amber) for "fix the sensor" situations. */
-@Composable
-private fun SensorHint(message: String) {
-    androidx.compose.material3.Surface(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(
-            com.silicovegas.wombcare.core.ui.theme.Radii.tile,
-        ),
-        color = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspectContainer,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(Spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Icon(
-                Icons.Rounded.Sensors,
-                contentDescription = null,
-                tint = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspect,
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
     }
 }
 
