@@ -387,12 +387,14 @@ class BleDeviceSource(
                     r.reading
                 }
                 // Live rule: classify the wellness status from the fetal heart rate itself
-                // (110–150 Normal, 151–200 Elevated, else Pathologic). Only when there's a real
-                // FHR lock — a no-lock window keeps the device's own status. The demo path
-                // (SimulatedDeviceSource) is untouched and keeps its scripted classification.
-                val reading = merged.fhrBpm?.let {
+                // (110–200 Normal, otherwise Elevated). Only when there's a real FHR lock — a
+                // no-lock window keeps the device's own status. Kick count is forced to 0 on the
+                // live path (kick detection isn't trusted on real hardware yet), which keeps the
+                // session kick total at 0. The demo path (SimulatedDeviceSource) is untouched.
+                val classified = merged.fhrBpm?.let {
                     merged.copy(status = com.silicovegas.wombcare.core.ble.wellnessFromFhr(it))
                 } ?: merged
+                val reading = classified.copy(kickCountInWindow = 0)
                 _readings.tryEmit(reading)
                 _connectionState.value = ConnectionState.Monitoring
             }
