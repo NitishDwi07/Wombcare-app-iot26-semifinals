@@ -270,21 +270,6 @@ fun PatientDashboardScreen(
                 },
             )
 
-            // Gentle, actionable guidance when the device is live but the signal is poor —
-            // so a blank FHR reads as "fix the sensor", not "something is wrong with baby".
-            if (ui.connection.isLive && !ui.waitingForFirstReading && latest != null) {
-                when {
-                    latest.fhrBpm == null -> SensorHint(
-                        "No fetal heartbeat detected. Reposition the sensor on your belly and " +
-                            "hold still for a few seconds.",
-                    )
-                    latest.signalLow -> SensorHint(
-                        "Weak signal. Adjust the sensor so it sits snugly, and stay still for " +
-                            "a clearer reading.",
-                    )
-                }
-            }
-
             // Real-time inference status — the share of the session in each class.
             if (readings.isNotEmpty()) {
                 InferenceStatusCard(stats)
@@ -380,34 +365,6 @@ private fun formatElapsed(totalSeconds: Long): String {
         h > 0 -> "$h hr $m min"
         m > 0 -> "$m min $s sec"
         else -> "$s sec"
-    }
-}
-
-/** A soft, non-alarming guidance note (amber) for "fix the sensor" situations. */
-@Composable
-private fun SensorHint(message: String) {
-    androidx.compose.material3.Surface(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(
-            com.silicovegas.wombcare.core.ui.theme.Radii.tile,
-        ),
-        color = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspectContainer,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(Spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Icon(
-                Icons.Rounded.Sensors,
-                contentDescription = null,
-                tint = com.silicovegas.wombcare.core.ui.theme.LocalStatusColors.current.suspect,
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
     }
 }
 

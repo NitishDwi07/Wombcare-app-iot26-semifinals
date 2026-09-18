@@ -49,7 +49,6 @@ import com.silicovegas.wombcare.core.ui.components.EmptyState
 import com.silicovegas.wombcare.core.ui.components.SectionCard
 import com.silicovegas.wombcare.core.ui.components.StatTile
 import com.silicovegas.wombcare.core.ui.components.StatusHeroCard
-import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
 import com.silicovegas.wombcare.core.ui.theme.Spacing
 import com.silicovegas.wombcare.feature.patient.charts.FhrTrendChart
 import com.silicovegas.wombcare.feature.patient.charts.NspTimelineStrip
@@ -329,15 +328,10 @@ private fun RecentTrendsCard(
                     )
                     Text(
                         buildString {
-                            append(if (s.worstNsp == 2) "Pathologic" else "Elevated")
-                            s.avgFhr?.let { append(" · avg FHR $it") }
+                            s.avgFhr?.let { append("avg FHR $it") }
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (s.worstNsp == 2) {
-                            LocalStatusColors.current.pathologic
-                        } else {
-                            LocalStatusColors.current.suspect
-                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
