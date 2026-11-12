@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.silicovegas.wombcare.core.data.AccountRepository
 import com.silicovegas.wombcare.core.data.AuthRepository
 import com.silicovegas.wombcare.core.data.DeviceModePreference
+import com.silicovegas.wombcare.core.data.HeartbeatSoundPreference
 import com.silicovegas.wombcare.core.data.model.UserRole
 import com.silicovegas.wombcare.core.device.DeviceSourceProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +25,7 @@ sealed interface DeleteState {
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val deviceMode: DeviceModePreference,
+    private val heartbeatSound: HeartbeatSoundPreference,
     private val auth: AuthRepository,
     private val account: AccountRepository,
     private val deviceSourceProvider: DeviceSourceProvider,
@@ -31,6 +33,11 @@ class SettingsViewModel @Inject constructor(
 
     private val _demoMode = MutableStateFlow(deviceMode.isDemoMode())
     val demoMode: StateFlow<Boolean> = _demoMode.asStateFlow()
+
+    /** "Heartbeat sound" toggle — reflected live on the dashboard. */
+    val heartbeatSoundEnabled: StateFlow<Boolean> = heartbeatSound.enabled
+
+    fun setHeartbeatSound(enabled: Boolean) = heartbeatSound.setEnabled(enabled)
 
     private val _deviceForgotten = MutableStateFlow(false)
     val deviceForgotten: StateFlow<Boolean> = _deviceForgotten.asStateFlow()

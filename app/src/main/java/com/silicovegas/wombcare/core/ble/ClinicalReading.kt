@@ -3,6 +3,19 @@ package com.silicovegas.wombcare.core.ble
 /** Device classification. `UNKNOWN` guards against a value the firmware shouldn't send. */
 enum class WellnessStatus { NORMAL, SUSPECT, PATHOLOGIC, UNKNOWN }
 
+/**
+ * Wellness status derived purely from the fetal heart rate. Applied to **live device**
+ * readings only (the demo keeps its own scripted arc). The band rule:
+ *  - below 110 bpm (bradycardia) or above 200 bpm (tachycardia) → Elevated (Suspect)
+ *  - 110–200 bpm → Normal
+ *
+ * Pathologic is intentionally never surfaced from this live rule — the strongest thing the
+ * live screen says on its own is "Elevated". Callers pass a real, locked FHR; a null (no lock)
+ * has no rate to judge, so those windows keep whatever status the device reported.
+ */
+fun wellnessFromFhr(fhrBpm: Int): WellnessStatus =
+    if (fhrBpm in 110..200) WellnessStatus.NORMAL else WellnessStatus.SUSPECT
+
 /** Maternal motion. Only transmitted by payload v2; see docs/BLE_CONTRACT.md §4. */
 enum class MotionState { RESTING, SITTING, WALKING, UNKNOWN }
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.silicovegas.wombcare.core.ble.ConnectionState
 import com.silicovegas.wombcare.core.data.AlertRepository
 import com.silicovegas.wombcare.core.data.AuthRepository
+import com.silicovegas.wombcare.core.data.HeartbeatSoundPreference
 import com.silicovegas.wombcare.core.data.PatientSyncRepository
 import com.silicovegas.wombcare.core.data.SharingPreference
 import com.silicovegas.wombcare.core.device.AlertDecision
@@ -55,9 +56,13 @@ class MonitoringViewModel @Inject constructor(
     private val syncRepository: PatientSyncRepository,
     private val alertRepository: AlertRepository,
     private val sharingPreference: SharingPreference,
+    heartbeatSound: HeartbeatSoundPreference,
 ) : ViewModel() {
 
     init { alertNotifier.ensureChannels() }
+
+    /** Whether the "Heartbeat sound" setting is on — drives the dashboard's audio playback. */
+    val heartbeatEnabled: StateFlow<Boolean> = heartbeatSound.enabled
 
     private val engine = SessionEngine(
         now = { System.currentTimeMillis() },

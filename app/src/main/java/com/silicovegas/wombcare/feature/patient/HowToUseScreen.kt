@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -50,7 +52,7 @@ import com.silicovegas.wombcare.core.ui.theme.LocalStatusColors
 import com.silicovegas.wombcare.core.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
-private const val PAGES = 8
+private const val PAGES = 11
 
 /**
  * The patient's "How to use WombCare" walkthrough — a tap-through (or swipe) guide the mother
@@ -95,7 +97,10 @@ fun HowToUseScreen(onDone: () -> Unit) {
                     3 -> RulePage()
                     4 -> PrepPage()
                     5 -> ConnectPage()
-                    6 -> ResultsPage()
+                    6 -> DashboardPage()
+                    7 -> StatusMeaningPage()
+                    8 -> SharePage()
+                    9 -> EverydayPage()
                     else -> DonePage()
                 }
             }
@@ -325,17 +330,97 @@ private fun Step(n: Int, text: String) {
 }
 
 @Composable
-private fun ResultsPage() {
+private fun DashboardPage() {
+    Icon(
+        Icons.Rounded.MonitorHeart, contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(52.dp),
+    )
+    Spacer(Modifier.height(Spacing.md))
+    Eyebrow("6 · Your dashboard")
+    Spacer(Modifier.height(Spacing.xs))
+    Title("What you'll see")
+    Spacer(Modifier.height(Spacing.md))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        InfoRow("Fetal heart rate", "your baby's heartbeat, in beats per minute")
+        InfoRow("Mother's heart rate", "your own pulse")
+        InfoRow("Kicks", "movements counted this session")
+        InfoRow("AI accuracy", "how confident the reading is")
+        InfoRow("Motion & battery", "whether you're resting, and the device's charge")
+    }
+}
+
+@Composable
+private fun StatusMeaningPage() {
     val s = LocalStatusColors.current
-    Eyebrow("6 · Read your results")
+    Eyebrow("7 · Understanding your status")
     Spacer(Modifier.height(Spacing.lg))
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
         StatusChip("Normal", s.normal)
-        StatusChip("Suspect", s.suspect)
+        StatusChip("Elevated", s.suspect)
         StatusChip("Pathological", s.pathologic)
     }
     Spacer(Modifier.height(Spacing.lg))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        InfoRow("Normal", "all looks well — keep monitoring")
+        InfoRow("Elevated", "worth keeping an eye on — not an emergency")
+        InfoRow("Pathological", "contact your doctor")
+    }
+    Spacer(Modifier.height(Spacing.sm))
     Body("Give it about a minute for the first reading to appear.")
+}
+
+@Composable
+private fun SharePage() {
+    Icon(
+        Icons.Rounded.Share, contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(52.dp),
+    )
+    Spacer(Modifier.height(Spacing.md))
+    Eyebrow("8 · Share with your doctor")
+    Spacer(Modifier.height(Spacing.md))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Step(1, "Open Share (top-right on the dashboard)")
+        Step(2, "Turn on Sharing")
+        Step(3, "Read your code to your doctor")
+    }
+    Spacer(Modifier.height(Spacing.sm))
+    Text(
+        "You're in control — turn sharing off any time.",
+        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+private fun EverydayPage() {
+    Icon(
+        Icons.Rounded.Settings, contentDescription = null,
+        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(52.dp),
+    )
+    Spacer(Modifier.height(Spacing.md))
+    Eyebrow("9 · Everyday")
+    Spacer(Modifier.height(Spacing.xs))
+    Title("Good to know")
+    Spacer(Modifier.height(Spacing.md))
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        InfoRow("Pause & resume", "tap Stop to pause, Start to continue")
+        InfoRow("New device", "use Forget device in Settings — it'll ask for the PIN again")
+        InfoRow("This guide", "reopen it any time from the ? icon or Settings")
+    }
+}
+
+@Composable
+private fun InfoRow(title: String, desc: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Box(
+            Modifier.padding(top = 7.dp).size(7.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text(desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable
